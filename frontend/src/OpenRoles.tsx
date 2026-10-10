@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BriefcaseBusiness, Search } from "lucide-react";
 import type { Organization, Person } from "./types";
-import { departmentFor } from "./openRoles";
+import { departmentFor } from "./orgRoleHelpers";
 
 export default function OpenRoles({
   data,

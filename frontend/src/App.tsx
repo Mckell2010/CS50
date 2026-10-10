@@ -36,7 +36,7 @@ import Editor from "./Editor";
 import ModelPage from "./ModelPage";
 import OpenRoles from "./OpenRoles";
 import StructurePage from "./StructurePage";
-import { withoutOpenRoles } from "./openRoles";
+import { withoutOpenRoles } from "./orgRoleHelpers";
 import CompanyAllocationView from "./CompanyAllocation";
 import { tierName, unitTier } from "./orgColors";
 import {

@@ -10,6 +10,8 @@ On Windows, extract the ZIP into a new folder and double-click **demo.cmd**. Pyt
 
 On macOS/Linux, run `./demo.sh --workbook "/path/to/chart.xlsx"`. You can also run `python scripts/run_demo.py --workbook "C:\path\chart.xlsx"` on Windows if the file picker is unavailable.
 
+When updating from an earlier ZIP, extract into a **new folder**, copy your old `data` folder into it while the app is stopped, and run `demo.cmd` there. Copy only `data`; reusing the old source folder can leave renamed files behind and cause Windows build errors.
+
 The private demo uses `data/private-demo.db`; the synthetic demo below uses `data/explorer.db`. The launcher preserves existing databases. Your workbook and database stay on your machine and are not included in the source ZIP. Back up the database before replacing an old app folder.
 
 In **Model settings**, edit reporting lines, titles, departments, employment dates, vacancies and FTE. Explicitly assign contributor splits individually or select filtered contributors for bulk assignment. Managers calculate their team's split from downstream contributor FTE. Use **Organizational units** to edit tiers and parent units.

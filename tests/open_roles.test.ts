@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { withoutOpenRoles, departmentFor } from "../frontend/src/openRoles.ts";
+import { withoutOpenRoles, departmentFor } from "../frontend/src/orgRoleHelpers.ts";
 const person = (id: string, manager: string, status = "active") =>
   ({ EmployeeID: id, ManagerID: manager, EmploymentStatus: status }) as any;
 test("hiding open roles reconnects occupied descendants without changing source reporting lines", () => {

@@ -132,3 +132,7 @@ Browser checks use only an isolated synthetic database. Screenshots and logs rem
 ## Banner update
 
 The organization headline is “Build the new industrial Age”. Banner headcount now reconciles FTE, contractor and unclassified people using the selected date and authorized scope, with vacancies/drafts excluded. “1 team” accompanies live unit counts. Validation: 126 backend tests, 9 TypeScript helper tests, the production build, and 21 browser workflow groups passed. Desktop and mobile layouts were checked; branch collapse leaves the banner counts unchanged.
+
+## Windows module-resolution fix
+
+Reproduced the screenshot's missing default export, filename-casing conflict and implicit-any callback errors using a TypeScript compiler host with case-insensitive lookup for project source files. `./OpenRoles` incorrectly resolved to the `openRoles.ts` helper before the `OpenRoles.tsx` component on Windows. Renamed the helper to `orgRoleHelpers.ts` and updated all imports. The case-insensitive resolution check now passes and runs in `scripts/check.sh`; 126 backend tests, 9 helper tests and the normal production build also pass. A Windows frontend build job was added to CI; no native Windows execution is claimed from this Linux workspace. Updated ZIP instructions use a fresh folder and copy only the existing data folder, avoiding stale renamed source files.
