@@ -120,7 +120,7 @@ def sample_state(count=30):
             "FTE": "0.8" if i == 20 else "1",
             "StartDate": "2025-01-01",
             "EndDate": "",
-            "Location": "Torrance, CA" if i % 3 else "Remote",
+            "Location": "Los Angeles - HQ" if i % 3 else "Remote",
             "EmploymentType": "Full time",
             "_source": "excel",
         }

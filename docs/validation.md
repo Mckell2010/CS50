@@ -109,3 +109,10 @@ The online SQLite backup script created a new backup, and reopening it produced 
 - **90 backend tests and 6 hierarchy-color tests passed**, with TypeScript checking and a successful production build. Color tests cover ancestry, company/department/team grouping, fallback labeling, scoped-out ancestors, stable colors, automatic expanded layers, focused branches, legacy types and deeper tiers.
 - All **18 browser acceptance groups passed**. The added flow confirms full backgrounds, same-unit grouping, different category colors, automatic tier selection and persistence after reload. Existing chart, allocation, planning, import and permission checks still pass.
 - Read-only private-workbook checks verified department coloring and the selector at five viewport widths from 390 to 1440 px without document overflow. Private screenshots remain ignored.
+
+## Location choices (October 10, 2026)
+
+- **92 backend tests and 6 hierarchy-color tests passed**, plus TypeScript checking and the production build.
+- All **18 browser acceptance groups passed**, including verification of exactly four nonblank location choices and a saved Washington DC selection.
+- New or changed person-editor/API locations accept Los Angeles - HQ, Los Angeles - LB, Washington DC or Remote. Blank remains unknown; existing imported labels are retained until explicitly replaced. The synthetic sample now uses an allowed location.
+- Restored the workbook contract reference after finding it had been inadvertently replaced by README content in an earlier change, retaining the current tiered-planning and card-color rules.

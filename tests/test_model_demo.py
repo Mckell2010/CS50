@@ -361,3 +361,41 @@ def test_department_overhead_is_an_alternative_view_of_the_same_pool():
             for r in result["rows"]
             if r["companyID"] == company
         )
+
+
+def test_location_choices_save_and_other_new_values_are_rejected(client):
+    from backend.domain import LOCATION_OPTIONS
+
+    for location in [*LOCATION_OPTIONS, ""]:
+        state, version = module.DB.read()
+        row = dict(state["Employees"]["030"], Location=location)
+        response = client.put(
+            "/api/planning/Employees/030", json={"version": version, "record": row}
+        )
+        assert response.status_code == 200, response.text
+        assert module.DB.read()[0]["Employees"]["030"]["Location"] == location
+    before = module.DB.read()
+    row["Location"] = "Unlisted location"
+    response = client.put(
+        "/api/planning/Employees/030", json={"version": before[1], "record": row}
+    )
+    assert response.status_code == 422
+    assert module.DB.read() == before
+
+
+def test_editing_other_fields_preserves_legacy_location_until_selected(client):
+    state, version = module.DB.read()
+    state["Employees"]["030"]["Location"] = "Legacy imported location"
+    module.DB.save(state, version, "test", "legacy-location")
+    state, version = module.DB.read()
+    row = dict(state["Employees"]["030"], JobTitle="Updated title")
+    assert (
+        client.put(
+            "/api/planning/Employees/030", json={"version": version, "record": row}
+        ).status_code
+        == 200
+    )
+    assert (
+        module.DB.read()[0]["Employees"]["030"]["Location"]
+        == "Legacy imported location"
+    )

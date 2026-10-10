@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { X, Check, AlertTriangle } from "lucide-react";
 import { api, type Organization, type RecordData } from "./types";
+const LOCATION_OPTIONS = [
+  "Los Angeles - HQ",
+  "Los Angeles - LB",
+  "Washington DC",
+  "Remote",
+];
 export const FIELDS: Record<string, string[]> = {
   Employees: [
     "EmployeeID",
@@ -221,6 +227,11 @@ export default function Editor({
                   "vacant",
                   "draft",
                 ].map((value) => ({ value, label: value }));
+              if (field === "Location")
+                options = LOCATION_OPTIONS.map((value) => ({
+                  value,
+                  label: value,
+                }));
               if (field === "SourceCompany")
                 options = ["divergent", "czinger"].map((value) => ({
                   value,
@@ -253,7 +264,11 @@ export default function Editor({
                 ].map((value) => ({ value, label: value }));
               const props = {
                 "aria-label": label(field),
-                value: form[field] ?? "",
+                value:
+                  field === "Location" &&
+                  !LOCATION_OPTIONS.includes(form[field])
+                    ? ""
+                    : (form[field] ?? ""),
                 onChange: (
                   e: React.ChangeEvent<
                     HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -276,6 +291,14 @@ export default function Editor({
                   className={field === "ObjectiveText" ? "full-width" : ""}
                 >
                   {label(field)}
+                  {field === "Location" &&
+                    form.Location &&
+                    !LOCATION_OPTIONS.includes(form.Location) && (
+                      <small>
+                        Saved location: {form.Location}. Choose one of the
+                        listed locations to replace it.
+                      </small>
+                    )}
                   {options ? (
                     <select {...props} required={field === "DivergentPercent"}>
                       <option value="">Select…</option>

@@ -4,6 +4,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import copy
 
+LOCATION_OPTIONS = ("Los Angeles - HQ", "Los Angeles - LB", "Washington DC", "Remote")
+
 COLUMNS = {
     "OrganizationalUnits": [
         "OrgUnitID",

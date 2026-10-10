@@ -356,9 +356,23 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             page.get_by_label("Find model people").fill("Finn Young")
             page.get_by_role("button", name="Edit person", exact=True).click()
             page.get_by_label("FTE", exact=True).fill("0.5")
+            location = page.get_by_label("Location", exact=True)
+            assert location.locator("option").all_text_contents() == [
+                "Select…",
+                "Los Angeles - HQ",
+                "Los Angeles - LB",
+                "Washington DC",
+                "Remote",
+            ]
+            location.select_option("Washington DC")
             page.get_by_role("button", name="Save changes", exact=True).click()
             expect(page.get_by_role("dialog")).to_have_count(0)
             expect(page.locator("tbody").first).to_contain_text("0.5")
+            page.get_by_role("button", name="Edit person", exact=True).click()
+            expect(page.get_by_label("Location", exact=True)).to_have_value(
+                "Washington DC"
+            )
+            page.get_by_role("button", name="Close editor", exact=True).click()
             page.get_by_label("Contractor participation").select_option("false")
             page.get_by_label("Divergent executive-pool percentage").fill("90")
             page.get_by_label("Executive pool members").select_option(["001"])

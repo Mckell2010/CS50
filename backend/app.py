@@ -561,6 +561,15 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
     existing = state[sheet].get(ident)
     if sheet == "Employees":
         require_admin(p)
+        if (
+            record.get("Location")
+            and record["Location"] not in LOCATION_OPTIONS
+            and (not existing or record["Location"] != existing.get("Location"))
+        ):
+            raise HTTPException(
+                422,
+                "Choose Los Angeles - HQ, Los Angeles - LB, Washington DC, or Remote",
+            )
     elif sheet == "CompanyAllocations":
         employee = state["Employees"].get(ident)
         if not employee or employee["OrgUnitID"] not in units:
