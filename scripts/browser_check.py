@@ -58,9 +58,7 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(BASE)
-            page.get_by_role(
-                "heading", name="Organization", exact=True
-            ).wait_for()
+            page.get_by_role("heading", name="Organization", exact=True).wait_for()
             page.wait_for_timeout(450)
             assert page.locator(".react-flow__node").count() == 1
             expect(
@@ -95,6 +93,42 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             page.wait_for_timeout(450)
             page.screenshot(
                 path=str(ARTIFACTS / "organization-desktop.png"), full_page=True
+            )
+            color_select = page.get_by_label("Card background tier")
+            expect(color_select).to_have_value("auto")
+            expect(page.get_by_label("Card background legend")).to_contain_text(
+                "Auto · Tier 2"
+            )
+            color_select.select_option("0")
+            page.wait_for_timeout(100)
+            categories = page.locator(".org-node").evaluate_all(
+                "els => [...new Set(els.map(e => e.dataset.colorCategory))]"
+            )
+            assert categories == ["company"]
+            company_background = page.locator(".org-node").first.evaluate(
+                "e => getComputedStyle(e).backgroundColor"
+            )
+            assert company_background not in ["rgb(255, 255, 255)", "rgba(0, 0, 0, 0)"]
+            color_select.select_option("2")
+            page.wait_for_timeout(100)
+            categories = page.locator(".org-node").evaluate_all(
+                "els => [...new Set(els.map(e => e.dataset.colorCategory))]"
+            )
+            assert "eng" in categories and "ops" in categories
+            backgrounds = page.locator(
+                '.org-node[data-color-category="eng"]'
+            ).evaluate_all(
+                "els => [...new Set(els.map(e => getComputedStyle(e).backgroundColor))]"
+            )
+            assert len(backgrounds) == 1 and backgrounds[0] != company_background
+            page.reload()
+            expect(page.get_by_label("Card background tier")).to_have_value("2")
+            expect(page.get_by_label("Card background legend")).to_contain_text(
+                "Tier 2 · Group"
+            )
+            page.get_by_label("Card background tier").select_option("auto")
+            mark(
+                "Person backgrounds group by selected tier, auto follows expanded layers, and selection persists"
             )
             summary_before = page.locator(".stats-grid").inner_text()
             page.get_by_role("button", name="Collapse all", exact=True).click()

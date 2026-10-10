@@ -29,6 +29,13 @@ import type { Organization, Person, Unit, RecordData } from "./types";
 import { initials, money } from "./types";
 import "@xyflow/react/dist/style.css";
 import CompanyAllocationView from "./CompanyAllocation";
+import {
+  cardColors,
+  automaticColorTier,
+  tierName,
+  unitTier,
+  type CardColor,
+} from "./orgColors";
 
 type CardData = {
   item: RecordData;
@@ -36,6 +43,9 @@ type CardData = {
   title: string;
   subtitle: string;
   color: string;
+  background: string;
+  colorCategory: string;
+  colorLabel: string;
   selected: boolean;
   expanded: boolean;
   count: number;
@@ -48,9 +58,12 @@ const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
   return (
     <div
       className={`org-node ${d.selected ? "selected" : ""}`}
+      data-color-category={d.colorCategory}
+      title={d.colorLabel}
       style={
         {
           "--node-accent": d.color,
+          "--node-background": d.background,
           height: d.unit ? 132 : 164,
         } as React.CSSProperties
       }
@@ -148,6 +161,7 @@ export type ChartProps = {
   selected: string;
   onSelect: (id: string) => void;
   overlay: string;
+  colorTier: string;
   focus: string;
   searchTarget: string;
   searchNonce: number;
@@ -161,6 +175,7 @@ function ChartInner({
   selected,
   onSelect,
   overlay,
+  colorTier,
   focus,
   searchTarget,
   searchNonce,
@@ -216,6 +231,49 @@ function ChartInner({
     }
     return ids;
   }, [roots, children, expanded]);
+  const effectiveTier = useMemo(() => {
+    if (
+      colorTier !== "auto" &&
+      Number.isInteger(Number(colorTier)) &&
+      Number(colorTier) >= 0
+    )
+      return Number(colorTier);
+    if (unit)
+      return Math.max(
+        0,
+        ...[...visible].map((id) => unitTier(byId.get(id) as Unit) || 0),
+      );
+    return automaticColorTier(
+      records.map((r) => ({ id: r[idField], parent: r[parentField] })),
+      visible,
+      data.units,
+    );
+  }, [
+    colorTier,
+    unit,
+    visible,
+    byId,
+    records,
+    idField,
+    parentField,
+    data.units,
+  ]);
+  const colors = useMemo(
+    () => cardColors(data.units, effectiveTier),
+    [data.units, effectiveTier],
+  );
+  const legend = useMemo(() => {
+    const categories = new Map<string, CardColor>();
+    visible.forEach((id) => {
+      const color = colors.get(byId.get(id)?.OrgUnitID);
+      if (color) categories.set(color.id, color);
+    });
+    return [...categories.values()].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [visible, colors, byId]);
+  const colorDescription = (color: CardColor) =>
+    `${color.label}${color.fallback && color.tier !== undefined ? ` · ${tierName(color.tier)} fallback; no ${tierName(effectiveTier).toLowerCase()} assigned` : ""}`;
   const toggle = useCallback(
     (id: string) => {
       const next = new Set(expanded);
@@ -268,7 +326,11 @@ function ChartInner({
             ? data.employees.find((e) => e.EmployeeID === r.OwnerEmployeeID)
                 ?.Name || "Owner unassigned"
             : r.JobTitle,
-          color: colorFor(r.OrgUnitID, data),
+          color: colors.get(r.OrgUnitID)?.accent || "#686868",
+          background: colors.get(r.OrgUnitID)?.background || "#eeeeec",
+          colorCategory: colors.get(r.OrgUnitID)?.id || "unmapped",
+          colorLabel: `Background: ${colors.get(r.OrgUnitID) ? colorDescription(colors.get(r.OrgUnitID)!) : "No assignment at this tier"}`,
+
           selected: selected === id,
           expanded: expanded.has(id),
           count: children.get(id)?.length || 0,
@@ -308,6 +370,8 @@ function ChartInner({
     data,
     selected,
     overlay,
+    colors,
+    effectiveTier,
     expanded,
     children,
     focus,
@@ -418,16 +482,32 @@ function ChartInner({
         />
         <Controls showInteractive={false} />
       </ReactFlow>
-      <div className="chart-legend">
-        {data.units
-          .filter((u) => u.UnitType === "group")
-          .slice(0, 4)
-          .map((u) => (
-            <span key={u.OrgUnitID}>
-              <i style={{ background: colorFor(u.OrgUnitID, data) }} />
-              {u.OrgUnitName}
+      <div
+        className="chart-legend tier-color-legend"
+        aria-label="Card background legend"
+      >
+        <strong>
+          {colorTier === "auto" ? "Auto · " : ""}Tier {effectiveTier} ·{" "}
+          {tierName(effectiveTier)}
+        </strong>
+        <div className="tier-color-swatches">
+          {legend.map((color) => (
+            <span key={color.id} title={colorDescription(color)}>
+              <i
+                style={{
+                  background: color.background,
+                  borderColor: color.accent,
+                }}
+              />
+              {color.label}
+              {color.fallback ? " (fallback)" : ""}
             </span>
           ))}
+        </div>
+        <small>
+          Backgrounds follow unit assignments. Split bars show company
+          allocation.
+        </small>
       </div>
       <div className="chart-count">
         {visible.size} of {records.length} {unit ? "units" : "people"} visible ·

@@ -720,3 +720,101 @@ td small,
     transition: none;
   }
 }
+
+/* Functional hierarchy colors are independent of the monochrome page theme. */
+.org-node {
+  background: var(--node-background, white);
+}
+.org-node .node-main,
+.org-node .node-footer {
+  background: transparent;
+}
+.org-node .node-footer {
+  border-top-color: color-mix(in srgb, var(--node-accent) 25%, transparent);
+}
+.org-node .avatar {
+  background: #ffffff80;
+  color: #252525;
+}
+.org-node .node-text > span,
+.org-node .node-text small,
+.org-node .node-footer > span {
+  color: #414141;
+}
+.org-node .expand-button {
+  background: #ffffffa6;
+  color: #252525;
+}
+.org-node .company-allocation .allocation-label {
+  color: #333;
+}
+.color-tier-picker {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  color: #515151;
+  font-size: 11px;
+}
+.color-tier-picker > span {
+  white-space: nowrap;
+}
+.color-tier-picker select {
+  padding: 7px;
+  font-size: 11px;
+  max-width: 190px;
+}
+.board-tools {
+  flex-wrap: wrap;
+}
+.tier-color-legend {
+  left: 55px;
+  right: 12px;
+  bottom: 42px;
+  display: block;
+  padding: 8px 10px;
+  max-height: 112px;
+  overflow: auto;
+  background: #fffffff2;
+  border: 1px solid #c7c7c5;
+  color: #3e3e3e;
+  font-size: 10px;
+}
+.tier-color-legend > strong {
+  display: block;
+  margin-bottom: 5px;
+}
+.tier-color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+}
+.tier-color-swatches > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tier-color-swatches i {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border: 1px solid;
+  border-radius: 0;
+}
+.tier-color-legend small {
+  display: block;
+  font-size: 9px;
+  margin-top: 6px;
+}
+@media (max-width: 760px) {
+  .color-tier-picker {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .color-tier-picker select {
+    max-width: 165px;
+  }
+  .tier-color-legend {
+    font-size: 9px;
+    max-height: 92px;
+  }
+}

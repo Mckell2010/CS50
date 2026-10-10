@@ -103,3 +103,9 @@ The online SQLite backup script created a new backup, and reopening it produced 
 - **90 backend tests**, TypeScript checking, the production build, and all **17 browser acceptance groups** passed. The existing JavaScript chunk-size advisory remains.
 - Additional browser checks covered payroll budgets, OKRs and model settings at widths 390, 700, 820, 1100, 1440 and 1920 px, with no document overflow or runtime errors. Private visual review screenshots remain ignored.
 - `https://www.divergent.us/#news` could not be read: this environment's network proxy rejected the HTTPS connection with HTTP 403. This is an industrial monochrome design direction, not a verified reproduction of the live website. A screenshot or accessible brand reference is still needed for exact matching.
+
+## Hierarchical card backgrounds (October 10, 2026)
+
+- **90 backend tests and 6 hierarchy-color tests passed**, with TypeScript checking and a successful production build. Color tests cover ancestry, company/department/team grouping, fallback labeling, scoped-out ancestors, stable colors, automatic expanded layers, focused branches, legacy types and deeper tiers.
+- All **18 browser acceptance groups passed**. The added flow confirms full backgrounds, same-unit grouping, different category colors, automatic tier selection and persistence after reload. Existing chart, allocation, planning, import and permission checks still pass.
+- Read-only private-workbook checks verified department coloring and the selector at five viewport widths from 390 to 1440 px without document overflow. Private screenshots remain ignored.

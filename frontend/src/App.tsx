@@ -35,6 +35,7 @@ import ImportPanel, { downloadWorkbook } from "./ImportPanel";
 import Editor from "./Editor";
 import ModelPage from "./ModelPage";
 import CompanyAllocationView from "./CompanyAllocation";
+import { tierName, unitTier } from "./orgColors";
 import {
   api,
   money,
@@ -72,6 +73,9 @@ export default function App() {
       new Set(remembered().expanded || []),
     ),
     [overlay, setOverlay] = useState(remembered().overlay || "headcount"),
+    [colorTier, setColorTier] = useState<string>(
+      remembered().colorTier || "auto",
+    ),
     [query, setQuery] = useState(""),
     [focus, setFocus] = useState(""),
     [searchTarget, setSearchTarget] = useState(""),
@@ -116,9 +120,15 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(
       "divergent-view",
-      JSON.stringify({ view, selected, expanded: [...expanded], overlay }),
+      JSON.stringify({
+        view,
+        selected,
+        expanded: [...expanded],
+        overlay,
+        colorTier,
+      }),
     );
-  }, [view, selected, expanded, overlay]);
+  }, [view, selected, expanded, overlay, colorTier]);
   useEffect(() => {
     if (!data) return;
     const rows = view === "people" ? data.employees : data.units;
@@ -934,6 +944,35 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  <label className="color-tier-picker">
+                    <span>Color by</span>
+                    <select
+                      aria-label="Card background tier"
+                      value={colorTier}
+                      onChange={(e) => setColorTier(e.target.value)}
+                    >
+                      <option value="auto">Auto · expanded layers</option>
+                      {[
+                        ...new Set([
+                          0,
+                          1,
+                          2,
+                          3,
+                          4,
+                          5,
+                          ...data.units
+                            .map(unitTier)
+                            .filter((t): t is number => t !== undefined),
+                        ]),
+                      ]
+                        .sort((a, b) => a - b)
+                        .map((t) => (
+                          <option key={t} value={String(t)}>
+                            Tier {t} · {tierName(t)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
                   <label className="overlay-picker">
                     <SlidersHorizontal size={14} />
                     <select
@@ -969,6 +1008,7 @@ export default function App() {
                     setShowPanel(true);
                   }}
                   overlay={overlay}
+                  colorTier={colorTier}
                   focus={focus}
                   searchTarget={searchTarget}
                   searchNonce={searchNonce}
