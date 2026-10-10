@@ -96,3 +96,10 @@ The online SQLite backup script created a new backup, and reopening it produced 
 - TypeScript and the production build passed; the existing chunk-size advisory remains.
 - **17 browser acceptance groups passed**. Verified Tier 0 entry, progressive expansion, child-budget actions unlocking after parent save, persisted allocations, parent-objective defaults and links, existing import and role behavior, and both planning pages at 390 px without horizontal overflow.
 - Read-only checks against the private workbook confirmed separate Tier 0 company budget cards and OKR sections for both companies. No private budgets or objectives were created during those checks.
+
+## Monochrome visual direction (October 10, 2026)
+
+- Replaced decorative green styling with neutral surfaces, black navigation and page headers, uppercase page titles, square controls, technical labels, and consistent chart/planning colors. Status and error colors remain semantic. The theme uses system fonts and requires no external asset requests.
+- **90 backend tests**, TypeScript checking, the production build, and all **17 browser acceptance groups** passed. The existing JavaScript chunk-size advisory remains.
+- Additional browser checks covered payroll budgets, OKRs and model settings at widths 390, 700, 820, 1100, 1440 and 1920 px, with no document overflow or runtime errors. Private visual review screenshots remain ignored.
+- `https://www.divergent.us/#news` could not be read: this environment's network proxy rejected the HTTPS connection with HTTP 403. This is an industrial monochrome design direction, not a verified reproduction of the live website. A screenshot or accessible brand reference is still needed for exact matching.

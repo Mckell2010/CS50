@@ -120,10 +120,10 @@ const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
 });
 const nodeTypes = { org: OrgCard };
 export const groupColors: Record<string, string> = {
-  eng: "#54716b",
-  ops: "#a6754d",
-  growth: "#777199",
-  company: "#3f5c50",
+  eng: "#363e46",
+  ops: "#687078",
+  growth: "#888e94",
+  company: "#141719",
 };
 export function colorFor(unit: string, data: Organization): string {
   let u = data.units.find((u) => u.OrgUnitID === unit);
@@ -137,7 +137,7 @@ export function colorFor(unit: string, data: Organization): string {
     u = data.units.find((x) => x.OrgUnitID === u!.ParentOrgUnitID);
   }
   const id = u?.OrgUnitID || unit;
-  const palette = ["#54716b", "#a6754d", "#777199", "#658052", "#527f90"];
+  const palette = ["#363e46", "#687078", "#888e94", "#50575e", "#a0a6ab"];
   const hash = [...id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
   return groupColors[id] || palette[hash % palette.length];
 }
@@ -291,7 +291,7 @@ function ChartInner({
           source: r[parentField],
           target: id,
           type: "smoothstep",
-          style: { stroke: "#bfcbc5", strokeWidth: 1.4 },
+          style: { stroke: "#aeb2b5", strokeWidth: 1.4 },
         });
       }
     });
@@ -414,7 +414,7 @@ function ChartInner({
           variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
-          color="#d5ddd5"
+          color="#d8d8d8"
         />
         <Controls showInteractive={false} />
       </ReactFlow>

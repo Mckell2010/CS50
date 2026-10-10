@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(BASE)
             page.get_by_role(
-                "heading", name="A clearer view of your organization."
+                "heading", name="Organization", exact=True
             ).wait_for()
             page.wait_for_timeout(450)
             assert page.locator(".react-flow__node").count() == 1

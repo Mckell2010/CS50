@@ -512,12 +512,12 @@ export default function App() {
   const summary = data.summary;
   const title =
     page === "model"
-      ? "Tune your organization."
+      ? "Model settings"
       : page === "organization"
-        ? "A clearer view of your organization."
+        ? "Organization"
         : page === "budgets"
-          ? "Resources, with a sense of direction."
-          : "Big ambitions. Shared progress.";
+          ? "Payroll & budgets"
+          : "Objectives & key results";
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -685,7 +685,7 @@ export default function App() {
                   ? "SYNTHETIC SAMPLE ORGANIZATION"
                   : summary.scope.toUpperCase()}
                 <span className="heading-dot" />
-                PEOPLE WITH PURPOSE
+                PEOPLE / STRUCTURE / RESOURCES
               </div>
               <h1>{title}</h1>
               <p>
