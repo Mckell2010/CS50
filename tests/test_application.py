@@ -770,3 +770,126 @@ def test_owner_can_create_team_only_within_assigned_scope(client):
         json={"version": data["version"], "record": record},
     )
     assert denied.status_code == 403
+
+
+@pytest.mark.parametrize("actor", ["admin", "finance"])
+def test_budgets_must_be_set_from_company_down_each_tier(client, actor):
+    role(client, actor)
+    state, version = module.DB.read()
+    state["Budgets"] = {}
+    parent = "company"
+    for tier, kind in enumerate(
+        ["function", "group", "department", "team", "subteam"], 1
+    ):
+        key = f"tier-{tier}"
+        state["OrganizationalUnits"][key] = dict(
+            OrgUnitID=key,
+            OrgUnitName=key,
+            ParentOrgUnitID=parent,
+            UnitType=kind,
+            Tier=str(tier),
+            OwnerEmployeeID="",
+        )
+        parent = key
+    module.DB.save(state, version, "test", "empty-budgets")
+
+    def record(unit):
+        return dict(
+            BudgetID=f"new-{unit}",
+            OrgUnitID=unit,
+            BudgetYear=str(date.today().year),
+            Currency="USD",
+            ApprovedEnvelope="1000000",
+            DirectAllocation="0",
+        )
+
+    before = module.DB.read()
+    assert edit(client, "Budgets", record("tier-5")).status_code == 422
+    assert module.DB.read() == before
+    assert edit(client, "Budgets", record("company")).status_code == 200
+    assert edit(client, "Budgets", record("tier-5")).status_code == 422
+    for tier in range(1, 6):
+        response = edit(client, "Budgets", record(f"tier-{tier}"))
+        assert response.status_code == 200, response.text
+    assert client.get("/api/organization").json()["units"][
+        0
+    ]  # All saved envelopes remain readable.
+
+
+@pytest.mark.parametrize(
+    "year,currency",
+    [(str(date.today().year + 1), "USD"), (str(date.today().year), "EUR")],
+)
+def test_parent_budget_must_match_year_and_currency(client, year, currency):
+    record = dict(
+        BudgetID="new-period",
+        OrgUnitID="eng",
+        BudgetYear=year,
+        Currency=currency,
+        ApprovedEnvelope="100",
+        DirectAllocation="0",
+    )
+    assert edit(client, "Budgets", record).status_code == 422
+    parent = dict(record, BudgetID="new-company-period", OrgUnitID="company")
+    assert edit(client, "Budgets", parent).status_code == 200
+    assert edit(client, "Budgets", record).status_code == 200
+
+
+@pytest.mark.parametrize("actor", ["admin", "finance"])
+def test_objectives_align_to_each_parent_tier_before_children(client, actor):
+    role(client, actor)
+    state, version = module.DB.read()
+    state["Objectives"] = {}
+    state["KeyResults"] = {}
+    parent = "company"
+    for tier, kind in enumerate(
+        ["function", "group", "department", "team", "subteam"], 1
+    ):
+        key = f"okr-tier-{tier}"
+        state["OrganizationalUnits"][key] = dict(
+            OrgUnitID=key,
+            OrgUnitName=key,
+            ParentOrgUnitID=parent,
+            UnitType=kind,
+            Tier=str(tier),
+            OwnerEmployeeID="",
+        )
+        parent = key
+    module.DB.save(state, version, "test", "empty-objectives")
+
+    def objective(unit, parent=""):
+        return dict(
+            ObjectiveID=f"objective-{unit}",
+            OrgUnitID=unit,
+            ParentObjectiveID=parent,
+            OwnerEmployeeID="001",
+            ObjectiveText=f"Outcome for {unit}",
+            PeriodStart="2026-01-01",
+            PeriodEnd="2026-12-31",
+            Status="not-started",
+        )
+
+    before = module.DB.read()
+    assert edit(client, "Objectives", objective("okr-tier-1")).status_code == 422
+    assert module.DB.read() == before
+    assert edit(client, "Objectives", objective("company")).status_code == 200
+    assert (
+        edit(
+            client, "Objectives", objective("okr-tier-2", "objective-company")
+        ).status_code
+        == 422
+    )
+    parent = "objective-company"
+    for tier in range(1, 6):
+        record = objective(f"okr-tier-{tier}", parent)
+        r = edit(client, "Objectives", record)
+        assert r.status_code == 200, r.text
+        parent = record["ObjectiveID"]
+    state, _ = module.DB.read()
+    assert len(state["Objectives"]) == 6
+    # Existing text/status can change without changing alignment; reparenting cannot skip a tier.
+    leaf = state["Objectives"]["objective-okr-tier-5"].copy()
+    leaf["ObjectiveText"] = "Updated outcome"
+    assert edit(client, "Objectives", leaf).status_code == 200
+    leaf["ParentObjectiveID"] = "objective-company"
+    assert edit(client, "Objectives", leaf).status_code == 422

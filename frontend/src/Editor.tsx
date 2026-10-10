@@ -138,6 +138,18 @@ export default function Editor({
               {error}
             </div>
           )}
+          {sheet === "Budgets" && (
+            <p className="notice">
+              {
+                data.units.find((u) => u.OrgUnitID === form.OrgUnitID)
+                  ?.OrgUnitName
+              }
+              : Approved Envelope is the annual payroll budget for this unit and
+              everything beneath it. Direct Allocation reserves part of that
+              budget for directly assigned employees; the rest can fund the next
+              tier. Child budgets are included in the parent total.
+            </p>
+          )}
           {sheet === "CompanyAllocations" && (
             <p className="notice">
               {
@@ -169,7 +181,19 @@ export default function Editor({
                 field === "ParentObjectiveID"
               )
                 options = data.objectives
-                  .filter((o) => o.ObjectiveID !== form.ObjectiveID)
+                  .filter((o) => {
+                    if (o.ObjectiveID === form.ObjectiveID) return false;
+                    if (field !== "ParentObjectiveID") return true;
+                    const unit = data.units.find(
+                      (u) => u.OrgUnitID === form.OrgUnitID,
+                    );
+                    return (
+                      o.ObjectiveID === form.ParentObjectiveID ||
+                      (unit?.ParentOrgUnitID
+                        ? o.OrgUnitID === unit.ParentOrgUnitID
+                        : unit?.UnitType !== "company" && o.readOnly)
+                    );
+                  })
                   .map((o) => ({
                     value: o.ObjectiveID,
                     label: o.ObjectiveText,
@@ -238,6 +262,9 @@ export default function Editor({
                   setForm((f) => ({
                     ...f,
                     [field]: e.target.value,
+                    ...(sheet === "Objectives" && field === "OrgUnitID"
+                      ? { ParentObjectiveID: "" }
+                      : {}),
                     ...(field === "FTE"
                       ? { FTEBasis: "Manually entered" }
                       : {}),

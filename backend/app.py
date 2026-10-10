@@ -659,28 +659,49 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
         raise HTTPException(
             422, {"message": "Invalid planning change", "errors": errors}
         )
-    if sheet in {"Budgets", "OrganizationalUnits"} and p.role == "owner":
-        if sheet == "Budgets":
-            parent_id = state["OrganizationalUnits"][record["OrgUnitID"]].get(
-                "ParentOrgUnitID"
-            )
-            budgeted = {
-                b["OrgUnitID"]
-                for b in state["Budgets"].values()
-                if b["BudgetYear"] == record["BudgetYear"]
-                and b["Currency"] == record["Currency"]
-            }
-            while parent_id and parent_id in units:
-                if parent_id not in budgeted:
-                    raise HTTPException(
-                        422,
-                        "Create an approved envelope for each parent unit before allocating its descendants",
-                    )
-                if parent_id == p.unit:
-                    break
-                parent_id = state["OrganizationalUnits"][parent_id].get(
-                    "ParentOrgUnitID"
+    if sheet == "Objectives" and (
+        not existing
+        or any(
+            record.get(f) != existing.get(f) for f in ["OrgUnitID", "ParentObjectiveID"]
+        )
+    ):
+        target_unit = state["OrganizationalUnits"][record["OrgUnitID"]]
+        parent_objective = state["Objectives"].get(record.get("ParentObjectiveID"))
+        if target_unit["UnitType"] == "company":
+            if parent_objective:
+                raise HTTPException(
+                    422,
+                    "Company objectives start at Tier 0 and do not have parent objectives",
                 )
+        elif not parent_objective or parent_objective["OrgUnitID"] != target_unit.get(
+            "ParentOrgUnitID"
+        ):
+            raise HTTPException(
+                422,
+                "Set an objective for the parent unit first, then link this objective to it. Plan OKRs from company level down, one tier at a time.",
+            )
+    if sheet == "Budgets":
+        parent_id = state["OrganizationalUnits"][record["OrgUnitID"]].get(
+            "ParentOrgUnitID"
+        )
+        budgeted = {
+            b["OrgUnitID"]
+            for b in state["Budgets"].values()
+            if b["BudgetYear"] == record["BudgetYear"]
+            and b["Currency"] == record["Currency"]
+        }
+        missing = []
+        while parent_id:
+            if parent_id not in budgeted:
+                missing.append(parent_id)
+            parent_id = state["OrganizationalUnits"][parent_id].get("ParentOrgUnitID")
+        if missing:
+            ancestor = state["OrganizationalUnits"][missing[-1]]["OrgUnitName"]
+            raise HTTPException(
+                422,
+                f"Set the parent unit budget for {ancestor} first ({record['BudgetYear']} {record['Currency']}). Allocate budgets from company level down, one tier at a time.",
+            )
+    if sheet in {"Budgets", "OrganizationalUnits"} and p.role == "owner":
         for unit in units | {
             ident if sheet == "OrganizationalUnits" else record["OrgUnitID"]
         }:

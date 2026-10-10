@@ -191,18 +191,30 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             mark("Independent unit hierarchy expands correctly")
             page.get_by_role("button", name="Payroll & budgets", exact=True).click()
             expect(
-                page.get_by_role(
-                    "heading", name="Annual resources by organizational unit"
-                )
+                page.get_by_role("heading", name="Payroll budgets by tier")
             ).to_be_visible()
-            assert page.locator("tbody tr").count() == 11
-            page.screenshot(path=str(ARTIFACTS / "budgets-desktop.png"), full_page=True)
-            mark("Budget page displays all unit envelopes and allocations")
-            page.get_by_role("button", name="Objectives & KRs", exact=False).click()
+            assert page.locator("tbody tr").count() == 1
             expect(
                 page.get_by_role(
-                    "heading", name="Shared direction. Measurable outcomes."
+                    "button", name="Edit company budget for Divergent", exact=True
                 )
+            ).to_be_visible()
+            page.get_by_role(
+                "button", name="Expand budget tiers under Divergent", exact=True
+            ).click()
+            assert page.locator("tbody tr").count() == 4
+            page.get_by_role("button", name="Expand budgeted tiers", exact=True).click()
+            assert page.locator("tbody tr").count() == 11
+            page.screenshot(path=str(ARTIFACTS / "budgets-desktop.png"), full_page=True)
+            mark(
+                "Budget page starts at Tier 0 and expands successive budget tiers without double counting"
+            )
+            page.get_by_role("button", name="Objectives & KRs", exact=False).click()
+            page.get_by_role(
+                "button", name="Expand planned OKR tiers", exact=True
+            ).click()
+            expect(
+                page.get_by_role("heading", name="Objectives & key results by tier")
             ).to_be_visible()
             assert page.locator(".objective-card").count() == 4
             page.get_by_role("button", name="Edit objective", exact=True).nth(1).click()
@@ -216,6 +228,9 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             ).to_be_visible()
             page.reload()
             page.get_by_role("button", name="Objectives & KRs", exact=False).click()
+            page.get_by_role(
+                "button", name="Expand planned OKR tiers", exact=True
+            ).click()
             expect(
                 page.get_by_role("heading", name="Browser-verified platform objective")
             ).to_be_visible()
@@ -256,11 +271,15 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
                 in page.request.get(BASE + "/api/session").text()
             )
             page.get_by_role("button", name="Payroll & budgets", exact=True).click()
+            page.get_by_role("button", name="Expand budgeted tiers", exact=True).click()
             assert page.locator("tbody tr").count() == 4
             assert page.request.get(BASE + "/api/people/002/compensation").status == 403
             assert page.request.get(BASE + "/api/workbooks/export").status == 403
             mark("Owner sees engineering scope; direct pay and exports are forbidden")
             page.get_by_role("button", name="Objectives & KRs", exact=False).click()
+            page.get_by_role(
+                "button", name="Expand planned OKR tiers", exact=True
+            ).click()
             expect(page.get_by_text("Company alignment · read only")).to_be_visible()
             page.get_by_label("Development role").select_option("viewer")
             page.wait_for_timeout(350)
@@ -344,6 +363,78 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             ), "Model settings mobile overflow"
             mark(
                 "Model person FTE and executive settings save and persist; mobile model fits viewport"
+            )
+            # New budget year: parent must be saved before child actions unlock.
+            page.get_by_role("button", name="Payroll & budgets", exact=True).click()
+            page.get_by_label("Metrics effective date").fill("2030-01-01")
+            page.get_by_label("Currency", exact=True).select_option("USD")
+            expect(
+                page.get_by_role(
+                    "button", name="Set company budget for Divergent", exact=True
+                )
+            ).to_be_visible()
+            page.get_by_role("button", name="Expand budgeted tiers", exact=True).click()
+            page.get_by_role(
+                "button", name="Expand budget tiers under Divergent", exact=True
+            ).click()
+            expect(
+                page.locator('[data-budget-unit="eng"] button.table-edit')
+            ).to_be_disabled()
+            page.get_by_role(
+                "button", name="Set company budget for Divergent", exact=True
+            ).click()
+            page.get_by_label("Approved Envelope", exact=True).fill("10000000")
+            page.get_by_label("Direct Allocation", exact=True).fill("0")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            expect(
+                page.locator('[data-budget-unit="eng"] button.table-edit')
+            ).to_be_enabled()
+            page.locator('[data-budget-unit="eng"] button.table-edit').click()
+            page.get_by_label("Approved Envelope", exact=True).fill("3000000")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            page.get_by_role(
+                "button", name="Expand budget tiers under Engineering", exact=True
+            ).click()
+            expect(
+                page.locator('[data-budget-unit="vehicle"] button.table-edit')
+            ).to_be_enabled()
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), "Tier budget mobile overflow"
+            page.get_by_role("button", name="Objectives & KRs", exact=False).click()
+            page.get_by_role("button", name="Collapse OKR tiers", exact=True).click()
+            assert page.locator(".objective-card").count() == 1
+            page.get_by_role(
+                "button", name="Expand OKR tiers under Divergent", exact=True
+            ).click()
+            page.get_by_role(
+                "button", name="Expand OKR tiers under Engineering", exact=True
+            ).click()
+            page.get_by_role(
+                "button", name="Add objective for Vehicle systems", exact=True
+            ).click()
+            expect(page.get_by_label("Parent Objective ID", exact=True)).to_have_value(
+                "o-eng"
+            )
+            page.get_by_label("Objective Text", exact=True).fill(
+                "Synthetic tiered vehicle outcome"
+            )
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(
+                page.get_by_role(
+                    "heading", name="Synthetic tiered vehicle outcome", exact=True
+                )
+            ).to_be_visible()
+            expect(page.locator('[data-okr-unit="vehicle"]')).to_contain_text(
+                "Contributes to: Browser-verified platform objective"
+            )
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), "Tier OKR mobile overflow"
+            mark(
+                "Tiered budgets unlock after parent save; OKRs link to the parent unit objective; both work on mobile"
             )
             assert not errors, errors
             mark("No browser runtime errors")

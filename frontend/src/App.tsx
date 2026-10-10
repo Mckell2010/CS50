@@ -60,6 +60,10 @@ export default function App() {
     [data, setData] = useState<Organization | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState("organization"),
+    [budgetExpanded, setBudgetExpanded] = useState<Set<string>>(new Set()),
+    [objectiveExpanded, setObjectiveExpanded] = useState<Set<string>>(
+      new Set(),
+    ),
     [view, setView] = useState<"people" | "units">(
       remembered().view || "people",
     ),
@@ -264,7 +268,12 @@ export default function App() {
         OrgUnitID: unitId || session?.unit || rootUnit,
         OwnerEmployeeID:
           unitFor(unitId || session?.unit || rootUnit)?.OwnerEmployeeID || "",
-        ParentObjectiveID: "",
+        ParentObjectiveID:
+          data?.objectives.find(
+            (o) =>
+              o.OrgUnitID ===
+              unitFor(unitId || session?.unit || rootUnit)?.ParentOrgUnitID,
+          )?.ObjectiveID || "",
         ObjectiveText: "",
         PeriodStart: asOf.slice(0, 4) + "-01-01",
         PeriodEnd: asOf.slice(0, 4) + "-12-31",
@@ -430,6 +439,70 @@ export default function App() {
       </div>
     );
   const roots = data.units.filter((u) => !u.ParentOrgUnitID);
+  const budgetUnits = new Map(data.units.map((u) => [u.OrgUnitID, u]));
+  const budgetChildren = new Map<string, Unit[]>();
+  for (const u of data.units) {
+    const siblings = budgetChildren.get(u.ParentOrgUnitID) || [];
+    siblings.push(u);
+    budgetChildren.set(u.ParentOrgUnitID, siblings);
+  }
+  const missingBudgetParent = (u: Unit) => {
+    let parent = budgetUnits.get(u.ParentOrgUnitID);
+    let missing: Unit | undefined;
+    while (parent) {
+      if (!parent.metrics.budget) missing = parent;
+      parent = budgetUnits.get(parent.ParentOrgUnitID);
+    }
+    return missing;
+  };
+  const tierRows = (expandedUnits: Set<string>) => {
+    const rows: { unit: Unit; depth: number }[] = [];
+    const stack = [...roots].reverse().map((unit) => ({ unit, depth: 0 }));
+    while (stack.length) {
+      const row = stack.pop()!;
+      rows.push(row);
+      if (expandedUnits.has(row.unit.OrgUnitID)) {
+        for (const child of [
+          ...(budgetChildren.get(row.unit.OrgUnitID) || []),
+        ].reverse()) {
+          stack.push({ unit: child, depth: row.depth + 1 });
+        }
+      }
+    }
+    return rows;
+  };
+  const budgetRows = tierRows(budgetExpanded);
+  const objectiveRows = tierRows(objectiveExpanded);
+  const objectivesFor = (id: string) =>
+    data.objectives.filter((o) => o.OrgUnitID === id);
+  const parentObjectivesFor = (u: Unit) =>
+    u.ParentOrgUnitID
+      ? objectivesFor(u.ParentOrgUnitID)
+      : u.UnitType === "company"
+        ? []
+        : data.objectives.filter((o) => o.readOnly);
+  const toggleBudget = (id: string) =>
+    setBudgetExpanded((previous) => {
+      const next = new Set(previous);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const tierLabel = (u: Unit) => {
+    const tier =
+      u.Tier !== undefined && u.Tier !== ""
+        ? u.Tier
+        : (
+            {
+              company: 0,
+              function: 1,
+              group: 2,
+              department: 3,
+              team: 4,
+            } as Record<string, number>
+          )[u.UnitType];
+    return `${tier == null ? "" : `Tier ${tier} · `}${u.UnitType}`;
+  };
+
   const companyEnvelope =
     session.role === "viewer" ||
     !roots.length ||
@@ -1281,10 +1354,11 @@ export default function App() {
             <section className="planning-page">
               <div className="section-heading">
                 <div>
-                  <h2>Annual resources by organizational unit</h2>
+                  <h2>Payroll budgets by tier</h2>
                   <p>
                     {asOf.slice(0, 4)} calendar year · {currency} · envelopes
-                    include descendants
+                    include descendants. Set company budgets first, then
+                    allocate each lower tier.
                   </p>
                 </div>
                 {session.canViewCompensation && (
@@ -1312,6 +1386,41 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  {session.canViewCompensation && (
+                    <div className="company-budget-grid">
+                      {roots
+                        .filter((u) => u.UnitType === "company")
+                        .map((u) => (
+                          <article
+                            className="company-budget-card"
+                            key={u.OrgUnitID}
+                          >
+                            <span className="budget-tier">
+                              Tier 0 · Company payroll budget
+                            </span>
+                            <h3>{u.OrgUnitName}</h3>
+                            <strong className="company-budget-amount">
+                              {u.metrics.budget
+                                ? money(u.metrics.envelope, currency)
+                                : "Set company budget first"}
+                            </strong>
+                            <p>
+                              {asOf.slice(0, 4)} · {currency} · Covers all
+                              functions, groups, departments and teams.
+                            </p>
+                            <button
+                              className="primary"
+                              onClick={() => editBudget(u)}
+                              aria-label={`${u.metrics.budget ? "Edit" : "Set"} company budget for ${u.OrgUnitName}`}
+                            >
+                              {u.metrics.budget
+                                ? "Edit company budget"
+                                : "Set company budget"}
+                            </button>
+                          </article>
+                        ))}
+                    </div>
+                  )}
                   <div className="budget-intro">
                     <div>
                       <span>
@@ -1331,6 +1440,32 @@ export default function App() {
                       compensation makes the comparison incomplete.
                     </p>
                   </div>
+                  <div className="budget-tree-toolbar">
+                    <p>
+                      Allocate from each parent budget into the next tier. Child
+                      budgets are portions of the company total.
+                    </p>
+                    <button
+                      className="secondary"
+                      onClick={() =>
+                        setBudgetExpanded(
+                          new Set(
+                            data.units
+                              .filter((u) => u.metrics.budget)
+                              .map((u) => u.OrgUnitID),
+                          ),
+                        )
+                      }
+                    >
+                      Expand budgeted tiers
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={() => setBudgetExpanded(new Set())}
+                    >
+                      Collapse tiers
+                    </button>
+                  </div>
                   <div className="table-scroll">
                     <table>
                       <thead>
@@ -1345,14 +1480,43 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.units.map((u) => (
-                          <tr key={u.OrgUnitID}>
+                        {budgetRows.map(({ unit: u, depth }) => (
+                          <tr key={u.OrgUnitID} data-budget-unit={u.OrgUnitID}>
                             <td>
-                              <strong>{u.OrgUnitName}</strong>
-                              <small>
-                                {u.UnitType} · {u.metrics.direct.headcount}{" "}
-                                directly assigned
-                              </small>
+                              <div
+                                className="budget-tree-unit"
+                                style={{
+                                  paddingLeft: Math.min(depth, 10) * 18,
+                                }}
+                              >
+                                {(budgetChildren.get(u.OrgUnitID)?.length ||
+                                  0) > 0 ? (
+                                  <button
+                                    className="budget-tree-toggle"
+                                    aria-label={`${budgetExpanded.has(u.OrgUnitID) ? "Collapse" : "Expand"} budget tiers under ${u.OrgUnitName}`}
+                                    aria-expanded={budgetExpanded.has(
+                                      u.OrgUnitID,
+                                    )}
+                                    onClick={() => toggleBudget(u.OrgUnitID)}
+                                  >
+                                    {budgetExpanded.has(u.OrgUnitID) ? (
+                                      <ChevronDown size={16} />
+                                    ) : (
+                                      <ChevronRight size={16} />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span className="budget-tree-spacer" />
+                                )}
+                                <div>
+                                  <strong>{u.OrgUnitName}</strong>
+                                  <small>
+                                    {tierLabel(u)} ·{" "}
+                                    {u.metrics.direct.headcount} directly
+                                    assigned
+                                  </small>
+                                </div>
+                              </div>
                             </td>
                             <td>{u.metrics.total.headcount}</td>
                             <td>
@@ -1409,8 +1573,18 @@ export default function App() {
                                 <button
                                   className="table-edit"
                                   onClick={() => editBudget(u)}
+                                  disabled={!!missingBudgetParent(u)}
+                                  title={
+                                    missingBudgetParent(u)
+                                      ? `Set ${missingBudgetParent(u)!.OrgUnitName}'s budget first`
+                                      : undefined
+                                  }
                                 >
-                                  {u.metrics.budget ? "Allocate" : "Set budget"}
+                                  {missingBudgetParent(u)
+                                    ? "Set parent budget first"
+                                    : u.metrics.budget
+                                      ? "Edit budget"
+                                      : "Set budget"}
                                   <ChevronRight size={13} />
                                 </button>
                               )}
@@ -1431,7 +1605,8 @@ export default function App() {
                     </p>
                   </div>
                   <div className="allocation-grid">
-                    {data.units
+                    {budgetRows
+                      .map(({ unit }) => unit)
                       .filter((u) => u.metrics.budget)
                       .map((u) => (
                         <div className="allocation-card" key={u.OrgUnitID}>
@@ -1463,32 +1638,115 @@ export default function App() {
             <section className="planning-page">
               <div className="section-heading">
                 <div>
-                  <h2>Shared direction. Measurable outcomes.</h2>
+                  <h2>Objectives & key results by tier</h2>
                   <p>
-                    Individual metrics keep their own units. Objective health is
-                    set by its owner.
+                    Set company objectives first, then connect each lower tier
+                    to the parent objective it supports. Key results keep their
+                    own measures.
                   </p>
                 </div>
-                {session.canEdit && (
-                  <button className="primary" onClick={() => newObjective()}>
-                    <Plus size={16} />
-                    New objective
-                  </button>
-                )}
               </div>
-              <div className="objectives-grid">
-                {data.objectives.map((o) => objectiveCard(o))}
+              <div className="budget-tree-toolbar">
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    setObjectiveExpanded(
+                      new Set(
+                        data.units
+                          .filter((u) => objectivesFor(u.OrgUnitID).length)
+                          .map((u) => u.OrgUnitID),
+                      ),
+                    )
+                  }
+                >
+                  Expand planned OKR tiers
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => setObjectiveExpanded(new Set())}
+                >
+                  Collapse OKR tiers
+                </button>
               </div>
-              {!data.objectives.length && (
-                <div className="empty-state">
-                  <Target size={34} />
-                  <h3>Make your priorities visible</h3>
-                  <p>
-                    Add a company or unit objective, then define measurable key
-                    results.
-                  </p>
+              {data.objectives.some((o) => o.readOnly) && (
+                <div className="objectives-grid">
+                  {data.objectives
+                    .filter((o) => o.readOnly)
+                    .map((o) => objectiveCard(o))}
                 </div>
               )}
+              <div className="okr-tier-tree">
+                {objectiveRows.map(({ unit: u, depth }) => (
+                  <section
+                    className="okr-tier-unit"
+                    key={u.OrgUnitID}
+                    data-okr-unit={u.OrgUnitID}
+                    style={{ marginLeft: Math.min(depth, 8) * 12 }}
+                  >
+                    <div className="okr-tier-heading">
+                      <div className="budget-tree-unit">
+                        {(budgetChildren.get(u.OrgUnitID)?.length || 0) > 0 && (
+                          <button
+                            className="budget-tree-toggle"
+                            aria-label={`${objectiveExpanded.has(u.OrgUnitID) ? "Collapse" : "Expand"} OKR tiers under ${u.OrgUnitName}`}
+                            aria-expanded={objectiveExpanded.has(u.OrgUnitID)}
+                            onClick={() =>
+                              setObjectiveExpanded((previous) => {
+                                const next = new Set(previous);
+                                next.has(u.OrgUnitID)
+                                  ? next.delete(u.OrgUnitID)
+                                  : next.add(u.OrgUnitID);
+                                return next;
+                              })
+                            }
+                          >
+                            {objectiveExpanded.has(u.OrgUnitID) ? (
+                              <ChevronDown size={16} />
+                            ) : (
+                              <ChevronRight size={16} />
+                            )}
+                          </button>
+                        )}
+                        <div>
+                          <span className="budget-tier">{tierLabel(u)}</span>
+                          <h3>{u.OrgUnitName}</h3>
+                        </div>
+                      </div>
+                      {session.canEdit && (
+                        <button
+                          className="secondary"
+                          aria-label={`Add objective for ${u.OrgUnitName}`}
+                          disabled={
+                            u.UnitType !== "company" &&
+                            !parentObjectivesFor(u).length
+                          }
+                          onClick={() => newObjective(u.OrgUnitID)}
+                        >
+                          <Plus size={14} />
+                          {u.UnitType === "company"
+                            ? "Add company objective"
+                            : "Add aligned objective"}
+                        </button>
+                      )}
+                    </div>
+                    {objectivesFor(u.OrgUnitID).length ? (
+                      <div className="objectives-grid">
+                        {objectivesFor(u.OrgUnitID).map((o) =>
+                          objectiveCard(o),
+                        )}
+                      </div>
+                    ) : (
+                      <p className="okr-tier-empty">
+                        {u.UnitType === "company"
+                          ? "Start with this company’s objectives, then add measurable key results."
+                          : parentObjectivesFor(u).length
+                            ? "Add objectives that support the parent tier, then define key results."
+                            : "Set the parent tier’s objectives first."}
+                      </p>
+                    )}
+                  </section>
+                ))}
+              </div>
             </section>
           )}
           <div className="page-footnote">

@@ -89,3 +89,10 @@ The online SQLite backup script created a new backup, and reopening it produced 
 - The generic release adapter was independently run without private discovery files. It imports the selected workbook and seeds structural labels; executive pool membership and leader corrections are configured by the user.
 - The launcher installed dependencies, built the frontend, started the private database and passed its HTTP readiness check on Linux. The Windows wrapper is included but has not been executed on Windows.
 - Corporate authentication, a public deployment and exact visual matching to the blocked website remain outside these local checks.
+
+## Tiered budgets and OKRs (October 10, 2026)
+
+- **90 backend tests passed**, including parent-first budget creation across five lower tiers, matching budget year/currency, rejected skipped ancestors, immediate-parent objective alignment, and preserved authorization/legacy edits.
+- TypeScript and the production build passed; the existing chunk-size advisory remains.
+- **17 browser acceptance groups passed**. Verified Tier 0 entry, progressive expansion, child-budget actions unlocking after parent save, persisted allocations, parent-objective defaults and links, existing import and role behavior, and both planning pages at 390 px without horizontal overflow.
+- Read-only checks against the private workbook confirmed separate Tier 0 company budget cards and OKR sections for both companies. No private budgets or objectives were created during those checks.
