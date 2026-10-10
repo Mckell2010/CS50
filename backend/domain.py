@@ -1,0 +1,582 @@
+"""Workbook contract and business rules; independent of HTTP and persistence."""
+
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
+import copy
+
+COLUMNS = {
+    "OrganizationalUnits": [
+        "OrgUnitID",
+        "OrgUnitName",
+        "ParentOrgUnitID",
+        "UnitType",
+        "OwnerEmployeeID",
+    ],
+    "Employees": [
+        "EmployeeID",
+        "Name",
+        "JobTitle",
+        "ManagerID",
+        "OrgUnitID",
+        "EmploymentStatus",
+        "FTE",
+        "StartDate",
+        "EndDate",
+        "Location",
+        "EmploymentType",
+    ],
+    "Compensation": [
+        "EmployeeID",
+        "EffectiveFrom",
+        "EffectiveTo",
+        "Currency",
+        "AnnualBasePay",
+        "AnnualTargetBonus",
+        "AnnualEmployerCosts",
+    ],
+    "Budgets": [
+        "BudgetID",
+        "OrgUnitID",
+        "BudgetYear",
+        "Currency",
+        "ApprovedEnvelope",
+        "DirectAllocation",
+    ],
+    "Objectives": [
+        "ObjectiveID",
+        "OrgUnitID",
+        "OwnerEmployeeID",
+        "ParentObjectiveID",
+        "ObjectiveText",
+        "PeriodStart",
+        "PeriodEnd",
+        "Status",
+    ],
+    "KeyResults": [
+        "KeyResultID",
+        "ObjectiveID",
+        "OwnerEmployeeID",
+        "MetricName",
+        "Unit",
+        "Baseline",
+        "CurrentValue",
+        "TargetValue",
+        "Direction",
+        "LastUpdated",
+    ],
+}
+KEYS = {s: c[0] for s, c in COLUMNS.items()}
+REQUIRED = {
+    "OrganizationalUnits": ["OrgUnitID", "OrgUnitName", "UnitType"],
+    "Employees": [
+        "EmployeeID",
+        "Name",
+        "JobTitle",
+        "OrgUnitID",
+        "EmploymentStatus",
+        "FTE",
+        "StartDate",
+    ],
+    "Compensation": [
+        "EmployeeID",
+        "EffectiveFrom",
+        "Currency",
+        "AnnualBasePay",
+        "AnnualTargetBonus",
+        "AnnualEmployerCosts",
+    ],
+    "Budgets": [
+        "BudgetID",
+        "OrgUnitID",
+        "BudgetYear",
+        "Currency",
+        "ApprovedEnvelope",
+        "DirectAllocation",
+    ],
+    "Objectives": [
+        "ObjectiveID",
+        "OrgUnitID",
+        "OwnerEmployeeID",
+        "ObjectiveText",
+        "PeriodStart",
+        "PeriodEnd",
+        "Status",
+    ],
+    "KeyResults": [
+        "KeyResultID",
+        "ObjectiveID",
+        "OwnerEmployeeID",
+        "MetricName",
+        "Unit",
+        "Direction",
+    ],
+}
+APP_FIELDS = {
+    "OrganizationalUnits": set(COLUMNS["OrganizationalUnits"]),
+    "Budgets": set(COLUMNS["Budgets"]),
+    "Objectives": set(COLUMNS["Objectives"]),
+    "KeyResults": set(COLUMNS["KeyResults"]),
+}
+MONEY = [
+    "AnnualBasePay",
+    "AnnualTargetBonus",
+    "AnnualEmployerCosts",
+    "ApprovedEnvelope",
+    "DirectAllocation",
+]
+DATE_FIELDS = {
+    "StartDate",
+    "EndDate",
+    "EffectiveFrom",
+    "EffectiveTo",
+    "PeriodStart",
+    "PeriodEnd",
+    "LastUpdated",
+}
+
+
+def empty_state():
+    return {s: {} for s in COLUMNS}
+
+
+def record_key(sheet, row):
+    return (
+        f"{row.get('EmployeeID','')}@{row.get('EffectiveFrom','')}"
+        if sheet == "Compensation"
+        else str(row.get(KEYS[sheet], ""))
+    )
+
+
+def clean_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%Y-%m-%d")
+    return str(value).strip()
+
+
+def number(value):
+    d = Decimal(str(value))
+    if not d.is_finite():
+        raise ValueError("Must be a finite number")
+    return d
+
+
+def cents(value):
+    return int((number(value) * 100).quantize(Decimal("1")))
+
+
+def children(records, parent):
+    out = {}
+    for key, row in records.items():
+        out.setdefault(row.get(parent, ""), []).append(key)
+    return out
+
+
+def descendants(records, parent, root):
+    adjacency = children(records, parent)
+    seen = set()
+    pending = [root]
+    while pending:
+        key = pending.pop()
+        if key in seen or key not in records:
+            continue
+        seen.add(key)
+        pending.extend(adjacency.get(key, []))
+    return seen
+
+
+def validate(state):
+    errors = []
+    warnings = []
+
+    def err(s, r, f, m):
+        errors.append(
+            {
+                "sheet": s,
+                "row": r.get("_row"),
+                "id": record_key(s, r),
+                "field": f,
+                "message": m,
+            }
+        )
+
+    refs = {
+        "Employees": {"ManagerID": "Employees", "OrgUnitID": "OrganizationalUnits"},
+        "OrganizationalUnits": {
+            "ParentOrgUnitID": "OrganizationalUnits",
+            "OwnerEmployeeID": "Employees",
+        },
+        "Compensation": {"EmployeeID": "Employees"},
+        "Budgets": {"OrgUnitID": "OrganizationalUnits"},
+        "Objectives": {
+            "OrgUnitID": "OrganizationalUnits",
+            "OwnerEmployeeID": "Employees",
+            "ParentObjectiveID": "Objectives",
+        },
+        "KeyResults": {"ObjectiveID": "Objectives", "OwnerEmployeeID": "Employees"},
+    }
+    for sheet, records in state.items():
+        for key, row in records.items():
+            for field in REQUIRED[sheet]:
+                if row.get(field, "") == "":
+                    err(sheet, row, field, "Required value is missing")
+            for field, target in refs.get(sheet, {}).items():
+                if row.get(field) and row[field] not in state[target]:
+                    err(sheet, row, field, f"Unknown {target} ID: {row[field]}")
+            for field in COLUMNS[sheet]:
+                value = row.get(field, "")
+                if value == "":
+                    continue
+                if isinstance(value, str) and (
+                    value.startswith("=") or len(value) > 4000
+                ):
+                    err(
+                        sheet,
+                        row,
+                        field,
+                        "Use literal text of at most 4,000 characters; formulas are not allowed",
+                    )
+                if field.endswith("ID") and (
+                    len(str(value)) > 128
+                    or any(ch in str(value) for ch in ["/", "\\", "\n", "\r", "\x00"])
+                ):
+                    err(
+                        sheet,
+                        row,
+                        field,
+                        "IDs must be at most 128 characters with no slashes or control characters",
+                    )
+                if field in DATE_FIELDS:
+                    try:
+                        date.fromisoformat(str(value))
+                    except ValueError:
+                        err(sheet, row, field, "Use ISO date YYYY-MM-DD")
+                if field in MONEY or field in [
+                    "FTE",
+                    "Baseline",
+                    "CurrentValue",
+                    "TargetValue",
+                    "BudgetYear",
+                ]:
+                    try:
+                        n = number(value)
+                        if field in MONEY and (
+                            n < 0
+                            or n > Decimal("1000000000000")
+                            or n.as_tuple().exponent < -2
+                        ):
+                            raise ValueError(
+                                "Use a nonnegative amount with at most two decimals (maximum 1 trillion)"
+                            )
+                        if field == "FTE" and not 0 <= n <= 1:
+                            raise ValueError("FTE must be between 0 and 1")
+                        if field == "BudgetYear" and (
+                            n != int(n) or not 2000 <= n <= 2200
+                        ):
+                            raise ValueError(
+                                "Use a whole calendar year from 2000 to 2200"
+                            )
+                    except (InvalidOperation, ValueError):
+                        err(
+                            sheet,
+                            row,
+                            field,
+                            "Invalid numeric value or out of allowed range",
+                        )
+            if row.get("Currency") and row["Currency"] not in {
+                "USD",
+                "EUR",
+                "GBP",
+                "CAD",
+                "JPY",
+                "AUD",
+                "CHF",
+                "CNY",
+                "INR",
+            }:
+                err(sheet, row, "Currency", "Unsupported currency code")
+            if sheet == "Employees" and row.get("EmploymentStatus") not in {
+                "active",
+                "leave",
+                "inactive",
+            }:
+                err(sheet, row, "EmploymentStatus", "Use active, leave, or inactive")
+            if sheet == "OrganizationalUnits" and row.get("UnitType") not in {
+                "company",
+                "group",
+                "department",
+                "subdepartment",
+            }:
+                err(
+                    sheet,
+                    row,
+                    "UnitType",
+                    "Use company, group, department, or subdepartment",
+                )
+            if sheet == "Objectives" and row.get("Status") not in {
+                "on-track",
+                "at-risk",
+                "off-track",
+                "complete",
+                "not-started",
+            }:
+                err(sheet, row, "Status", "Unknown objective health status")
+            if sheet == "KeyResults" and row.get("Direction") not in {
+                "increase",
+                "decrease",
+            }:
+                err(sheet, row, "Direction", "Use increase or decrease")
+            if (
+                sheet == "KeyResults"
+                and row.get("Baseline", "") != ""
+                and row.get("TargetValue", "") != ""
+            ):
+                try:
+                    b, t = number(row["Baseline"]), number(row["TargetValue"])
+                    if (row["Direction"] == "increase" and t < b) or (
+                        row["Direction"] == "decrease" and t > b
+                    ):
+                        err(
+                            sheet,
+                            row,
+                            "TargetValue",
+                            "Target is incompatible with the metric direction",
+                        )
+                except (ValueError, InvalidOperation):
+                    pass
+            for start, end in [
+                ("StartDate", "EndDate"),
+                ("EffectiveFrom", "EffectiveTo"),
+                ("PeriodStart", "PeriodEnd"),
+            ]:
+                if row.get(start) and row.get(end) and row[end] < row[start]:
+                    err(sheet, row, end, "End must not precede start")
+    for sheet, parent in [
+        ("Employees", "ManagerID"),
+        ("OrganizationalUnits", "ParentOrgUnitID"),
+        ("Objectives", "ParentObjectiveID"),
+    ]:
+        done = set()
+        for key, row in state[sheet].items():
+            chain = set()
+            cur = key
+            while cur and cur in state[sheet] and cur not in done:
+                if cur in chain:
+                    err(
+                        sheet, row, parent, "Hierarchy cycle or self-reference detected"
+                    )
+                    break
+                chain.add(cur)
+                cur = state[sheet][cur].get(parent, "")
+            done.update(chain)
+    roots = [
+        r["EmployeeID"] for r in state["Employees"].values() if not r.get("ManagerID")
+    ]
+    if len(roots) > 1:
+        warnings.append(
+            f"{len(roots)} reporting roots require review: " + ", ".join(roots[:15])
+        )
+    unit_roots = [
+        r["OrgUnitID"]
+        for r in state["OrganizationalUnits"].values()
+        if not r.get("ParentOrgUnitID")
+    ]
+    if len(unit_roots) > 1:
+        warnings.append(
+            "Multiple organizational roots are present; budgets are calculated separately."
+        )
+    unknown_ends = sum(
+        r.get("EmploymentStatus") == "inactive" and not r.get("EndDate")
+        for r in state["Employees"].values()
+    )
+    if unknown_ends:
+        warnings.append(
+            f"{unknown_ends} inactive employees lack an EndDate and cannot be included in historical headcount. Add employment end dates for accurate as-of reporting."
+        )
+    intervals = {}
+    budgets = set()
+    for row in state["Compensation"].values():
+        intervals.setdefault(row["EmployeeID"], []).append(row)
+    for rows in intervals.values():
+        rows.sort(key=lambda r: r.get("EffectiveFrom", ""))
+        for a, b in zip(rows, rows[1:]):
+            if b.get("EffectiveFrom", "") <= (a.get("EffectiveTo") or "9999-12-31"):
+                err(
+                    "Compensation",
+                    b,
+                    "EffectiveFrom",
+                    "Overlapping compensation periods (end dates are inclusive)",
+                )
+    for row in state["Budgets"].values():
+        key = (row.get("OrgUnitID"), row.get("BudgetYear"), row.get("Currency"))
+        if key in budgets:
+            err(
+                "Budgets",
+                row,
+                "OrgUnitID",
+                "Duplicate budget for this unit, year, and currency",
+            )
+        budgets.add(key)
+    return errors, warnings
+
+
+def merge_import(current, incoming, mode, actor):
+    merged = copy.deepcopy(current)
+    changes = []
+    conflicts = []
+    for sheet, records in incoming.items():
+        for key, row in records.items():
+            old = current[sheet].get(key)
+            comparable = lambda x: {
+                f: clean_value(x.get(f, "")) for f in COLUMNS[sheet]
+            }
+            if old and comparable(old) == comparable(row):
+                continue
+            if old and old.get("_source") == "app" and sheet in APP_FIELDS:
+                conflicts.append(
+                    {
+                        "sheet": sheet,
+                        "id": key,
+                        "message": "App-owned record preserved. Resolve in the planning editor; workbook ownership is not changed.",
+                    }
+                )
+                continue
+            change = {
+                "sheet": sheet,
+                "id": key,
+                "kind": "update" if old else "addition",
+            }
+            if old and sheet == "Employees":
+                if old.get("ManagerID") != row.get("ManagerID"):
+                    change["reportingChange"] = True
+                if old.get("OrgUnitID") != row.get("OrgUnitID"):
+                    change["unitMove"] = True
+            row = copy.deepcopy(row)
+            row["_source"] = "excel"
+            row["_editor"] = actor
+            row["_modified"] = datetime.now().isoformat()
+            merged[sheet][key] = row
+            changes.append(change)
+    if mode == "snapshot":
+        for key, old in current["Employees"].items():
+            if (
+                key not in incoming["Employees"]
+                and old.get("_source") == "excel"
+                and old.get("EmploymentStatus") != "inactive"
+            ):
+                last_active = (date.today() - timedelta(days=1)).isoformat()
+                end = min(old.get("EndDate") or last_active, last_active)
+                if end < old.get("StartDate", ""):
+                    end = ""
+                merged["Employees"][key] = dict(
+                    old,
+                    EmploymentStatus="inactive",
+                    EndDate=end,
+                    _editor=actor,
+                    _modified=datetime.now().isoformat(),
+                )
+                changes.append(
+                    {"sheet": "Employees", "id": key, "kind": "deactivation"}
+                )
+    return merged, changes, conflicts
+
+
+def active(row, as_of):
+    status = row.get("EmploymentStatus")
+    known_employment = status in {"active", "leave"} or (
+        status == "inactive" and bool(row.get("EndDate"))
+    )
+    return (
+        known_employment
+        and row.get("StartDate", "9999") <= as_of
+        and (not row.get("EndDate") or row["EndDate"] >= as_of)
+    )
+
+
+def payroll(state, employee_ids, as_of, currency):
+    people = [
+        state["Employees"][k]
+        for k in employee_ids
+        if active(state["Employees"][k], as_of)
+    ]
+    effective = {}
+    for c in state["Compensation"].values():
+        if (
+            c["EmployeeID"] in employee_ids
+            and c["EffectiveFrom"] <= as_of
+            and (not c.get("EffectiveTo") or c["EffectiveTo"] >= as_of)
+        ):
+            effective[c["EmployeeID"]] = c
+    total = 0
+    missing = 0
+    other = 0
+    for e in people:
+        c = effective.get(e["EmployeeID"])
+        if not c:
+            missing += 1
+        elif c["Currency"] != currency:
+            other += 1
+        else:
+            total += sum(cents(c[f]) for f in MONEY[:3])
+    return {
+        "headcount": len(people),
+        "fte": float(sum((number(e["FTE"]) for e in people), Decimal(0))),
+        "payroll": total / 100,
+        "missingPay": missing,
+        "otherCurrency": other,
+        "complete": not (missing or other),
+    }
+
+
+def kr_progress(row, as_of):
+    result = {
+        "progress": None,
+        "reason": "Missing measurement",
+        "stale": not row.get("LastUpdated")
+        or (date.fromisoformat(as_of) - date.fromisoformat(row["LastUpdated"])).days
+        > 30,
+    }
+    if any(row.get(k, "") == "" for k in ["Baseline", "CurrentValue", "TargetValue"]):
+        return result
+    b, c, t = (number(row[k]) for k in ["Baseline", "CurrentValue", "TargetValue"])
+    if b == t:
+        result["reason"] = "Baseline equals target; no percentage is defined"
+        return result
+    result.update(progress=round(float((c - b) / (t - b) * 100), 1), reason=None)
+    return result
+
+
+def budget_metrics(state, unit, year, currency, as_of):
+    rows = {
+        r["OrgUnitID"]: r
+        for r in state["Budgets"].values()
+        if str(r["BudgetYear"]) == str(year) and r["Currency"] == currency
+    }
+    b = rows.get(unit)
+    units = descendants(state["OrganizationalUnits"], "ParentOrgUnitID", unit)
+    people = {k for k, e in state["Employees"].items() if e["OrgUnitID"] in units}
+    direct = {k for k, e in state["Employees"].items() if e["OrgUnitID"] == unit}
+    result = {
+        "total": payroll(state, people, as_of, currency),
+        "direct": payroll(state, direct, as_of, currency),
+        "budget": b,
+    }
+    if b:
+        child_units = children(state["OrganizationalUnits"], "ParentOrgUnitID").get(
+            unit, []
+        )
+        allocated = sum(
+            cents(rows[k]["ApprovedEnvelope"]) for k in child_units if k in rows
+        )
+        env, allocation = cents(b["ApprovedEnvelope"]), cents(b["DirectAllocation"])
+        result.update(
+            envelope=env / 100,
+            directAllocation=allocation / 100,
+            childEnvelopes=allocated / 100,
+            unallocated=(env - allocation - allocated) / 100,
+            headroom=env / 100 - result["total"]["payroll"],
+            directHeadroom=allocation / 100 - result["direct"]["payroll"],
+            missingChildBudgets=sum(k not in rows for k in child_units),
+        )
+    return result
