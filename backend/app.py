@@ -305,7 +305,14 @@ def compensation(ident: str, p: Principal = Depends(principal)):
     if ident not in state["Employees"]:
         raise HTTPException(404, "Employee not found")
     return [
-        public(c) for c in state["Compensation"].values() if c["EmployeeID"] == ident
+        {
+            **public(c),
+            "AnnualTotal": (
+                None if annual_pay_cents(c) is None else annual_pay_cents(c) / 100
+            ),
+        }
+        for c in state["Compensation"].values()
+        if c["EmployeeID"] == ident
     ]
 
 
@@ -338,7 +345,9 @@ def create_preview(content, filename, mapping, mode, p, synthetic=False, restore
     incoming, parse_errors, headers, warnings = parse_workbook(content, mapping)
     current, v = DB.read()
     # A restored older snapshot must not overwrite any app-owned records.
-    merged, changes, conflicts = merge_import(current, incoming, mode, p.id)
+    merged, changes, conflicts = merge_import(
+        current, incoming, mode, p.id, deleted_units=DB.get_setting("deleted_units", [])
+    )
     if mode == "snapshot" and not incoming["Employees"]:
         parse_errors.append(
             {
@@ -550,9 +559,7 @@ class Edit(BaseModel):
 def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
     require_editor(p)
     if sheet not in APP_FIELDS:
-        raise HTTPException(
-            400, "Use workbook imports for employee and compensation changes"
-        )
+        raise HTTPException(400, "Unsupported planning sheet")
     state, v = DB.read()
     units = visible_units(state, p)
     record = {k: clean_value(body.record.get(k, "")) for k in COLUMNS[sheet]}
@@ -561,6 +568,18 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
     existing = state[sheet].get(ident)
     if sheet == "Employees":
         require_admin(p)
+        employment = record.get("EmploymentType")
+        if employment not in {"FTE", "Contractor"} and (
+            not existing or employment != existing.get("EmploymentType", "")
+        ):
+            raise HTTPException(422, "Choose FTE or Contractor")
+        if employment == "FTE" and record.get("ExemptionStatus") not in {
+            "exempt",
+            "non-exempt",
+        }:
+            raise HTTPException(422, "Choose exempt or non-exempt for an FTE")
+        if employment == "Contractor" and record.get("ExemptionStatus"):
+            raise HTTPException(422, "Contractors do not have an exemption status")
         if (
             record.get("Location")
             and record["Location"] not in LOCATION_OPTIONS
@@ -569,6 +588,23 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
             raise HTTPException(
                 422,
                 "Choose Los Angeles - HQ, Los Angeles - LB, Washington DC, or Remote",
+            )
+    elif sheet == "Compensation":
+        if not p.finance:
+            raise HTTPException(403, "Individual compensation access required")
+        employee = state["Employees"].get(record["EmployeeID"])
+        if not employee:
+            raise HTTPException(404, "Employee not found")
+        # Existing periods retain their historical pay basis when employment changes.
+        expected_basis = (
+            existing.get("PayBasis")
+            if existing and existing.get("PayBasis")
+            else pay_basis(employee)
+        )
+        if not expected_basis or record.get("PayBasis") != expected_basis:
+            raise HTTPException(
+                422,
+                "Set Employment Type and FTE exemption status before entering the matching compensation",
             )
     elif sheet == "CompanyAllocations":
         employee = state["Employees"].get(ident)
@@ -731,6 +767,82 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
             "before": public(existing) if existing else None,
             "after": public(record),
         },
+    )
+    return {"version": body.version + 1}
+
+
+class DeleteUnit(BaseModel):
+    version: int
+    promoteChildren: bool = False
+
+
+@app.delete("/api/units/{ident}")
+def delete_unit(ident: str, body: DeleteUnit, p: Principal = Depends(principal)):
+    if not p.finance:
+        raise HTTPException(
+            403, "Administrator or finance access required to remove units"
+        )
+    state, version = DB.read()
+    if body.version != version:
+        raise HTTPException(409, "Data changed. Reload before deleting.")
+    unit = state["OrganizationalUnits"].get(ident)
+    if not unit:
+        raise HTTPException(404, "Unit not found")
+    references = {
+        sheet: sum(r.get("OrgUnitID") == ident for r in state[sheet].values())
+        for sheet in ["Employees", "Budgets", "Objectives"]
+    }
+    config = DB.get_setting("model", {})
+    if ident in {config.get("divergentUnit"), config.get("czingerUnit")}:
+        raise HTTPException(
+            422,
+            "Update the company assignments in Model settings before deleting this unit",
+        )
+    if any(references.values()):
+        raise HTTPException(
+            422,
+            "Reassign this unit's records before deleting: "
+            + ", ".join(
+                f"{count} {sheet.lower()}"
+                for sheet, count in references.items()
+                if count
+            ),
+        )
+    child_units = [
+        u
+        for u in state["OrganizationalUnits"].values()
+        if u.get("ParentOrgUnitID") == ident
+    ]
+    if child_units and (not body.promoteChildren or not unit.get("ParentOrgUnitID")):
+        raise HTTPException(
+            422,
+            "Move child units first, or choose to promote them to this unit's parent",
+        )
+    before = [public(u) for u in child_units]
+    for child in child_units:
+        child.update(
+            ParentOrgUnitID=unit["ParentOrgUnitID"],
+            _source="app",
+            _editor=p.id,
+            _modified=datetime.now(timezone.utc).isoformat(),
+        )
+    del state["OrganizationalUnits"][ident]
+    errors, _ = validate(state)
+    if errors:
+        raise HTTPException(422, {"message": "Cannot delete unit", "errors": errors})
+    deleted = set(DB.get_setting("deleted_units", [])) | {ident}
+    DB.save(
+        state,
+        body.version,
+        p.id,
+        "delete-OrganizationalUnits",
+        {
+            "id": ident,
+            "before": public(unit),
+            "promotedBefore": before,
+            "promotedTo": unit.get("ParentOrgUnitID"),
+        },
+        setting=("deleted_units", sorted(deleted)),
     )
     return {"version": body.version + 1}
 

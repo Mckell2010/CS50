@@ -55,6 +55,13 @@ def parse_workbook(content, mapping=None):
             if name in names
         }
         for field in REQUIRED[sheet]:
+            if (
+                sheet == "Compensation"
+                and "PayBasis" in indexes
+                and field
+                in {"AnnualBasePay", "AnnualTargetBonus", "AnnualEmployerCosts"}
+            ):
+                continue
             if field not in indexes:
                 errors.append(
                     {

@@ -28,6 +28,7 @@ COLUMNS = {
         "EndDate",
         "Location",
         "EmploymentType",
+        "ExemptionStatus",
         "SourceCompany",
         "FTEBasis",
     ],
@@ -40,6 +41,10 @@ COLUMNS = {
         "AnnualBasePay",
         "AnnualTargetBonus",
         "AnnualEmployerCosts",
+        "PayBasis",
+        "HourlyRate",
+        "AnnualHours",
+        "MonthlyRate",
     ],
     "Budgets": [
         "BudgetID",
@@ -120,6 +125,7 @@ REQUIRED = {
     ],
 }
 APP_FIELDS = {
+    "Compensation": set(COLUMNS["Compensation"]),
     "Employees": set(COLUMNS["Employees"]),
     "CompanyAllocations": set(COLUMNS["CompanyAllocations"]),
     "OrganizationalUnits": set(COLUMNS["OrganizationalUnits"]),
@@ -133,6 +139,8 @@ MONEY = [
     "AnnualEmployerCosts",
     "ApprovedEnvelope",
     "DirectAllocation",
+    "HourlyRate",
+    "MonthlyRate",
 ]
 DATE_FIELDS = {
     "StartDate",
@@ -230,6 +238,12 @@ def validate(state):
     for sheet, records in state.items():
         for key, row in records.items():
             for field in REQUIRED[sheet]:
+                if (
+                    sheet == "Compensation"
+                    and row.get("PayBasis")
+                    and field in MONEY[:3]
+                ):
+                    continue
                 if sheet == "Employees" and (
                     field == "FTE"
                     or (
@@ -277,6 +291,7 @@ def validate(state):
                     "CurrentValue",
                     "TargetValue",
                     "BudgetYear",
+                    "AnnualHours",
                 ]:
                     try:
                         n = number(value)
@@ -288,6 +303,8 @@ def validate(state):
                             raise ValueError(
                                 "Use a nonnegative amount with at most two decimals (maximum 1 trillion)"
                             )
+                        if field == "AnnualHours" and not 0 <= n <= 8784:
+                            raise ValueError("Annual hours must be between 0 and 8784")
                         if field == "FTE" and not 0 <= n <= 1:
                             raise ValueError("FTE must be between 0 and 1")
                         if field == "BudgetYear" and (
@@ -303,6 +320,53 @@ def validate(state):
                             field,
                             "Invalid numeric value or out of allowed range",
                         )
+            if sheet == "Employees":
+                exemption = row.get("ExemptionStatus")
+                if exemption and (
+                    row.get("EmploymentType") != "FTE"
+                    or exemption not in {"exempt", "non-exempt"}
+                ):
+                    err(
+                        sheet,
+                        row,
+                        "ExemptionStatus",
+                        "Choose exempt or non-exempt for an FTE only",
+                    )
+            if sheet == "Compensation" and row.get("PayBasis"):
+                basis = row["PayBasis"]
+                required_pay = {
+                    "salary": ["AnnualBasePay", "AnnualTargetBonus"],
+                    "hourly": ["HourlyRate"],
+                    "monthly": ["MonthlyRate"],
+                }
+                if basis not in required_pay:
+                    err(sheet, row, "PayBasis", "Choose salary, hourly, or monthly")
+                else:
+                    for field in required_pay[basis]:
+                        if row.get(field, "") == "":
+                            err(
+                                sheet,
+                                row,
+                                field,
+                                "Required compensation value is missing",
+                            )
+                    allowed = set(required_pay[basis]) | (
+                        {"AnnualHours"} if basis == "hourly" else set()
+                    )
+                    for field in {
+                        "AnnualBasePay",
+                        "AnnualTargetBonus",
+                        "HourlyRate",
+                        "MonthlyRate",
+                        "AnnualHours",
+                    } - allowed:
+                        if row.get(field) not in (None, "", "0", "0.00"):
+                            err(
+                                sheet,
+                                row,
+                                field,
+                                "Field does not apply to this pay basis",
+                            )
             if row.get("Currency") and row["Currency"] not in {
                 "USD",
                 "EUR",
@@ -504,12 +568,25 @@ def validate(state):
     return errors, warnings
 
 
-def merge_import(current, incoming, mode, actor):
+def merge_import(current, incoming, mode, actor, deleted_units=()):
     merged = {**empty_state(), **copy.deepcopy(current)}
     changes = []
     conflicts = []
     for sheet, records in incoming.items():
         for key, row in records.items():
+            if (
+                sheet == "OrganizationalUnits"
+                and key in deleted_units
+                and key not in current[sheet]
+            ):
+                conflicts.append(
+                    {
+                        "sheet": sheet,
+                        "id": key,
+                        "message": "Unit deleted in the app; workbook row is skipped.",
+                    }
+                )
+                continue
             old = current.get(sheet, {}).get(key)
             comparable = lambda x: {
                 f: clean_value(x.get(f, "")) for f in COLUMNS[sheet]
@@ -577,6 +654,32 @@ def active(row, as_of):
     )
 
 
+def pay_basis(person):
+    if person.get("EmploymentType") == "Contractor":
+        return "monthly"
+    if person.get("EmploymentType") == "FTE":
+        return {"exempt": "salary", "non-exempt": "hourly"}.get(
+            person.get("ExemptionStatus")
+        )
+    return None
+
+
+def annual_pay_cents(row):
+    """Actual annual compensation; never multiply by allocation FTE again."""
+    basis = row.get("PayBasis")
+    if basis == "hourly":
+        if row.get("AnnualHours", "") == "":
+            return None
+        base = cents(number(row["HourlyRate"]) * number(row["AnnualHours"]))
+    elif basis == "monthly":
+        base = cents(number(row["MonthlyRate"]) * 12)
+    else:
+        base = cents(row.get("AnnualBasePay") or 0) + cents(
+            row.get("AnnualTargetBonus") or 0
+        )
+    return base + cents(row.get("AnnualEmployerCosts") or 0)
+
+
 def payroll(state, employee_ids, as_of, currency):
     people = [
         state["Employees"][k]
@@ -601,7 +704,11 @@ def payroll(state, employee_ids, as_of, currency):
         elif c["Currency"] != currency:
             other += 1
         else:
-            total += sum(cents(c[f]) for f in MONEY[:3])
+            annual = annual_pay_cents(c)
+            if annual is None:
+                missing += 1
+            else:
+                total += annual
     result = {
         "headcount": len(people),
         "fte": float(sum((number(e.get("FTE") or 0) for e in people), Decimal(0))),

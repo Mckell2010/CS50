@@ -116,3 +116,15 @@ The online SQLite backup script created a new backup, and reopening it produced 
 - All **18 browser acceptance groups passed**, including verification of exactly four nonblank location choices and a saved Washington DC selection.
 - New or changed person-editor/API locations accept Los Angeles - HQ, Los Angeles - LB, Washington DC or Remote. Blank remains unknown; existing imported labels are retained until explicitly replaced. The synthetic sample now uses an allowed location.
 - Restored the workbook contract reference after finding it had been inadvertently replaced by README content in an earlier change, retaining the current tiered-planning and card-color rules.
+
+## Employment, open roles, and organization structure update
+
+Validated October 10, 2026: 123 API/domain tests and 9 TypeScript helper tests passed; TypeScript checking and the Vite production build passed. Chromium passed 21 workflow groups with no runtime errors. The updated checks cover:
+
+- Salary + bonus, hourly × editable annual hours, and monthly × 12, with exact annual payroll and no extra FTE multiplier. Hourly entry defaults to 2,080 hours. Missing imported hours remain incomplete.
+- Employment classification, conditional pay fields, bad amounts/hours, overlapping periods, historical basis preservation, retained legacy employer costs, permission checks, stale-write rejection, and import/export preservation.
+- Vacancy grouping/search by manager and department, distinct cards, chart hide/show, and preservation of filled descendants and saved manager links.
+- Company/tier/subtier creation, branch moves, department code preservation, changed unit payroll rollups with unchanged company totals/reporting lines, child promotion on empty-level deletion, rejection of occupied/budgeted units, stale deletion, audit history and deletion preservation on reimport.
+- Desktop and 390 px mobile structure layouts; previous allocations, budgets, OKRs, imports and permissions remain covered.
+
+Browser checks use only an isolated synthetic database. Screenshots and logs remain in ignored artifacts. Existing Starlette deprecation and Vite bundle-size advisories remain nonblocking.

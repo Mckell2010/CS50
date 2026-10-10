@@ -20,7 +20,8 @@ IDs are immutable text up to 128 characters with no slashes/control characters. 
 | StartDate | Filled positions | Inclusive employment start. Vacant/draft positions may leave it blank. |
 | EndDate | No | Inclusive last date, or blank if open-ended. |
 | Location | No | Editor choices: `Los Angeles - HQ`, `Los Angeles - LB`, `Washington DC`, `Remote`. Blank means not supplied. Imported legacy labels remain unchanged until replaced; new or changed editor/API values must use this list. |
-| EmploymentType | No | Employment label such as `Full time`; contractor/consultant/vendor/agency/temp labels participate in the contractor toggle. |
+| EmploymentType | New/changed editor values | `FTE` or `Contractor`. Imported legacy labels stay intact until explicitly classified. Contractor/consultant/vendor/agency/temp legacy labels still participate in the contractor toggle. |
+| ExemptionStatus | FTE editor saves | `exempt` or `non-exempt` for FTEs; blank for contractors. No exemption is inferred from imported job titles or full-time labels. |
 
 As-of headcount uses the inclusive StartDate/EndDate interval. An inactive person with a known EndDate still counts on dates within that employment interval; inactive people without EndDate are excluded and produce an import warning because historical employment is unknown. Full-snapshot deactivation sets the last active date to yesterday (or an earlier existing EndDate). This model covers one employment interval per person; rehire spells, historical FTE changes and historically effective reporting/unit assignments are not versioned separately. Imported snapshots retain earlier datasets for review.
 
@@ -61,11 +62,15 @@ Owners can edit contributors in their assigned organizational scope. Manager com
 | EffectiveFrom | Yes | Inclusive start; together with employee ID identifies a compensation version. |
 | EffectiveTo | No | Inclusive end. Blank means no end; overlapping intervals are rejected. |
 | Currency | Yes | Currency code. |
-| AnnualBasePay | Yes | Employee's actual contracted annual base, already at contracted FTE. |
-| AnnualTargetBonus | Yes | Actual annual target bonus at contracted FTE. Explicit `0` means none. |
-| AnnualEmployerCosts | Yes | Actual annual employer costs at contracted FTE. Explicit `0` means none. |
+| AnnualBasePay | Salary / legacy | Actual annual salary, already at contracted FTE. |
+| AnnualTargetBonus | Salary / legacy | Actual annual bonus. Explicit `0` means none. |
+| AnnualEmployerCosts | Legacy | Existing annual employer costs are retained and included; new app records use zero. |
+| PayBasis | New app records | `salary` for exempt FTE, `hourly` for non-exempt FTE, `monthly` for contractor. Blank preserves the legacy annual format. |
+| HourlyRate | Hourly | Hourly compensation rate. |
+| AnnualHours | Hourly annualization | Editor defaults to 2,080, editable per person, 0–8,784. Imported hourly rows without hours have unknown annual payroll. |
+| MonthlyRate | Monthly | Monthly contractor rate; annualized × 12. |
 
-Missing compensation is an absent effective row, **not zero**. A partially blank compensation row is invalid. Annualized loaded payroll run rate is `AnnualBasePay + AnnualTargetBonus + AnnualEmployerCosts`, counted once per unique active person using the effective row for the chosen date. **Do not multiply by FTE again.** Mixed currencies are excluded from the selected-currency total and counted as incomplete. UI headroom is provisional when pay is incomplete. The app does not compute YTD actuals, future hiring forecasts, planned vacancies, raises, FX conversions or monthly cash spending.
+Missing compensation is an absent effective row, **not zero**. Required pay fields depend on PayBasis. Annualized payroll is salary + annual bonus, hourly rate × AnnualHours, or monthly rate × 12; existing annual employer costs are added once. Blank PayBasis retains the legacy annual sum. Non-applicable pay fields must be blank or zero. Missing hourly assumptions are incomplete compensation. Amounts are counted once per unique active person using the effective row for the chosen date. **Do not multiply by FTE again.** Mixed currencies are excluded from the selected-currency total and counted as incomplete. UI headroom is provisional when pay is incomplete. The app does not compute YTD actuals, future hiring forecasts, planned vacancies, raises, FX conversions or monthly cash spending.
 
 ## Budgets (optional)
 
@@ -122,7 +127,7 @@ Imports first parse/map the workbook, validate the proposed merged state, and sa
 
 Incremental mode keeps omitted rows. Full-snapshot mode soft-deactivates omitted Excel-managed employees only after explicit confirmation; it never hard-deletes historical compensation or planning references. Empty snapshots cannot deactivate the entire company. Multiple employee roots require explicit warning acknowledgement.
 
-Imported employee/compensation records and initial organizational/planning data are Excel-owned. Once edited through a planning form, a unit/budget/objective/KR becomes **app-owned as a whole record**. This conservative ownership rule is explicit: future differing workbook rows are reported as conflicts and skipped, never silently overwritten. The confirmation checkbox acknowledges keeping the current app-owned value. Resolve differences by editing the planning record in the app. There is currently no bulk ownership-transfer UI and no automatic field-by-field conflict merge.
+Imported employee/compensation records and initial organizational/planning data are Excel-owned. Once edited through a planning form, a person/compensation/unit/budget/objective/KR becomes **app-owned as a whole record**. This conservative ownership rule is explicit: future differing workbook rows are reported as conflicts and skipped, never silently overwritten. The confirmation checkbox acknowledges keeping the current app-owned value. Resolve differences by editing the planning record in the app. There is currently no bulk ownership-transfer UI and no automatic field-by-field conflict merge.
 
 App-created subdepartments always survive reimports and snapshot restoration. Provenance records source, editor, modification timestamp and import version where applicable; audits capture planning before/after values, moves, deactivations and import changes. Restore previews reapply a saved snapshot incrementally, preserving app-owned work that occurred later. A snapshot restore is not a global rollback and does not remove newer unrelated records.
 
@@ -149,3 +154,13 @@ A new objective in a non-company unit must link to an objective in its immediate
 Card backgrounds resolve the person's primary OrgUnitID upward through unit parents at the chosen tier, independently of ManagerID and company allocation percentages. Colors derive from stable unit IDs, so labels, filters and expansion do not reassign them. Missing tiers use the nearest known higher unit with a fallback label; unavailable ancestry stays neutral. These are generated visual categories, not imported brand colors.
 
 Auto follows expanded reporting layers while retaining a focused branch's depth, then resolves colors against actual unit ancestry. It does not create or reassign units. Unit charts instead use their deepest visible unit tier. A saved dropdown choice can hold a tier fixed. The legend names the categories; company-allocation bars remain independent. Only already authorized units are used.
+
+## Organization structure and open roles
+
+**Org structure** creates company roots and child tiers, supports deeper subteams, unit moves, and person assignments. Editing a unit parent moves its entire subtree for budget rollups without modifying reporting managers or department codes. Review existing budget envelopes and objective alignment after moves. Explicit tier numbers remain classifications; removing an intermediate level does not renumber its descendants.
+
+Admin/finance can delete a unit only after all direct employee records (including inactive and vacancies), budgets and objectives are reassigned. For a non-root unit with no direct references, deletion can promote its child units to its parent. This is version checked and atomic, audited, and preserves moved children as app-owned. A configured model company cannot be deleted until Model settings are changed. Deleted unit IDs are retained in application settings so reimports skip them and report conflicts; incoming references to a removed unit must be corrected.
+
+The **Open roles** tab lists only `vacant` positions within the authorized scope, grouping by direct manager or nearest department ancestor. Drafts are separate from vacancies. Cards use a dashed outline, a briefcase icon and an OPEN ROLE label while preserving their tier background color. The chart’s Show open roles setting is saved in this browser. Hiding vacancies reconnects filled descendants to the nearest visible manager for display only, with dashed edges identifying a skipped open role; metrics and stored manager assignments are unchanged.
+
+Compensation is editable only by admin/finance and never included in general people/organization payloads. Editing a historical compensation period retains its recorded basis; a classification change does not rewrite past pay. Close the previous period before adding a new basis, because effective dates cannot overlap.

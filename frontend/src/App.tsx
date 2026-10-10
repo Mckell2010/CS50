@@ -34,6 +34,9 @@ import OrgChart, { colorFor } from "./OrgChart";
 import ImportPanel, { downloadWorkbook } from "./ImportPanel";
 import Editor from "./Editor";
 import ModelPage from "./ModelPage";
+import OpenRoles from "./OpenRoles";
+import StructurePage from "./StructurePage";
+import { withoutOpenRoles } from "./openRoles";
 import CompanyAllocationView from "./CompanyAllocation";
 import { tierName, unitTier } from "./orgColors";
 import {
@@ -61,6 +64,9 @@ export default function App() {
     [data, setData] = useState<Organization | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState("organization"),
+    [showOpenRoles, setShowOpenRoles] = useState(
+      remembered().showOpenRoles ?? true,
+    ),
     [budgetExpanded, setBudgetExpanded] = useState<Set<string>>(new Set()),
     [objectiveExpanded, setObjectiveExpanded] = useState<Set<string>>(
       new Set(),
@@ -126,9 +132,10 @@ export default function App() {
         expanded: [...expanded],
         overlay,
         colorTier,
+        showOpenRoles,
       }),
     );
-  }, [view, selected, expanded, overlay, colorTier]);
+  }, [view, selected, expanded, overlay, colorTier, showOpenRoles]);
   useEffect(() => {
     if (!data) return;
     const rows = view === "people" ? data.employees : data.units;
@@ -225,7 +232,13 @@ export default function App() {
   const results = useMemo(() => {
     if (!data || query.trim().length < 1) return [];
     const q = query.toLowerCase();
-    return (view === "people" ? data.employees : data.units)
+    return (
+      view === "people"
+        ? data.employees.filter(
+            (p) => showOpenRoles || p.EmploymentStatus !== "vacant",
+          )
+        : data.units
+    )
       .filter((r) =>
         (view === "people"
           ? `${r.Name} ${r.JobTitle} ${unitFor(r.OrgUnitID)?.OrgUnitName}`
@@ -235,7 +248,7 @@ export default function App() {
           .includes(q),
       )
       .slice(0, 8);
-  }, [query, data, view]);
+  }, [query, data, view, showOpenRoles]);
   const searchSelect = (id: string) => {
     setFocus("");
     setSearchTarget(id);
@@ -255,8 +268,62 @@ export default function App() {
     setQuery("");
   };
   const saved = () => {
+    setComp(null);
     reload();
     notify("Planning change saved");
+  };
+  const chartData = useMemo(
+    () =>
+      data && !showOpenRoles
+        ? { ...data, employees: withoutOpenRoles(data.employees) }
+        : data,
+    [data, showOpenRoles],
+  );
+  const toggleOpenRoles = (visible: boolean) => {
+    setShowOpenRoles(visible);
+    if (!visible) {
+      if (
+        data?.employees.find((p) => p.EmployeeID === selected)
+          ?.EmploymentStatus === "vacant"
+      )
+        setSelected("");
+      if (
+        data?.employees.find((p) => p.EmployeeID === focus)
+          ?.EmploymentStatus === "vacant"
+      )
+        setFocus("");
+      setSearchTarget("");
+      setQuery("");
+    }
+  };
+  const compensationBasis = (p: RecordData) =>
+    p.EmploymentType === "Contractor"
+      ? "monthly"
+      : p.EmploymentType === "FTE"
+        ? { exempt: "salary", "non-exempt": "hourly" }[
+            p.ExemptionStatus as string
+          ]
+        : undefined;
+  const editCompensation = (p: RecordData, c?: RecordData) => {
+    const basis = c?.PayBasis || compensationBasis(p);
+    setEditor({
+      sheet: "Compensation",
+      record: {
+        EmployeeID: p.EmployeeID,
+        EffectiveFrom: c?.EffectiveFrom || asOf,
+        EffectiveTo: c?.EffectiveTo || "",
+        Currency: c?.Currency || currency,
+        PayBasis: basis,
+        AnnualBasePay: basis === "salary" ? (c?.AnnualBasePay ?? "") : "",
+        AnnualTargetBonus:
+          basis === "salary" ? (c?.AnnualTargetBonus ?? "0") : "",
+        AnnualEmployerCosts: c?.AnnualEmployerCosts || "0",
+        HourlyRate: basis === "hourly" ? (c?.HourlyRate ?? "") : "",
+        AnnualHours: basis === "hourly" ? c?.AnnualHours || "2080" : "",
+        MonthlyRate: basis === "monthly" ? (c?.MonthlyRate ?? "") : "",
+        existing: !!c,
+      },
+    });
   };
   const editBudget = (u: Unit) =>
     setEditor({
@@ -521,13 +588,17 @@ export default function App() {
       : roots.reduce((sum, u) => sum + (u.metrics.envelope || 0), 0);
   const summary = data.summary;
   const title =
-    page === "model"
-      ? "Model settings"
-      : page === "organization"
-        ? "Organization"
-        : page === "budgets"
-          ? "Payroll & budgets"
-          : "Objectives & key results";
+    page === "structure"
+      ? "Org structure"
+      : page === "open-roles"
+        ? "Open roles"
+        : page === "model"
+          ? "Model settings"
+          : page === "organization"
+            ? "Organization"
+            : page === "budgets"
+              ? "Payroll & budgets"
+              : "Objectives & key results";
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -565,6 +636,26 @@ export default function App() {
             <GitBranch size={18} />
             Organization
             <span className="nav-indicator" />
+          </button>
+          <button
+            className={page === "structure" ? "active" : ""}
+            onClick={() => setPage("structure")}
+          >
+            <Building2 size={18} />
+            Org structure
+          </button>
+          <button
+            className={page === "open-roles" ? "active" : ""}
+            onClick={() => setPage("open-roles")}
+          >
+            <BriefcaseBusiness size={18} />
+            Open roles
+            <span className="nav-count">
+              {
+                data.employees.filter((p) => p.EmploymentStatus === "vacant")
+                  .length
+              }
+            </span>
           </button>
           <button
             className={page === "budgets" ? "active" : ""}
@@ -653,13 +744,17 @@ export default function App() {
             Workspace
             <ChevronRight size={12} />
             <strong>
-              {page === "model"
-                ? "Model settings"
-                : page === "organization"
-                  ? "Organization"
-                  : page === "budgets"
-                    ? "Payroll & budgets"
-                    : "Objectives & KRs"}
+              {page === "structure"
+                ? "Org structure"
+                : page === "open-roles"
+                  ? "Open roles"
+                  : page === "model"
+                    ? "Model settings"
+                    : page === "organization"
+                      ? "Organization"
+                      : page === "budgets"
+                        ? "Payroll & budgets"
+                        : "Objectives & KRs"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -699,13 +794,17 @@ export default function App() {
               </div>
               <h1>{title}</h1>
               <p>
-                {page === "model"
-                  ? "Review people, reporting lines, company assignments, and informational overhead."
-                  : page === "organization"
-                    ? "Explore the people, teams, and connections moving us forward."
-                    : page === "budgets"
-                      ? "Align annual resources with the teams doing the work."
-                      : "Connect company priorities to meaningful, measurable outcomes."}
+                {page === "structure"
+                  ? "Build the tiers that organize departments, budgets and objectives."
+                  : page === "open-roles"
+                    ? "Review unfilled positions by manager or department."
+                    : page === "model"
+                      ? "Review people, reporting lines, company assignments, and informational overhead."
+                      : page === "organization"
+                        ? "Explore the people, teams, and connections moving us forward."
+                        : page === "budgets"
+                          ? "Align annual resources with the teams doing the work."
+                          : "Connect company priorities to meaningful, measurable outcomes."}
               </p>
             </div>
             {session.canImport && (
@@ -857,6 +956,41 @@ export default function App() {
               <p>Health is owner-reported</p>
             </div>
           </section>
+          {page === "structure" && (
+            <StructurePage
+              data={data}
+              session={session}
+              onEdit={(sheet, record) => setEditor({ sheet, record })}
+              onSaved={saved}
+              onBudget={editBudget}
+              onView={(id) => {
+                setPage("organization");
+                setView("units");
+                setSelected(id);
+                setShowPanel(true);
+                searchSelect(id);
+              }}
+            />
+          )}
+          {page === "open-roles" && (
+            <OpenRoles
+              data={data}
+              onView={(id) => {
+                setPage("organization");
+                setView("people");
+                setShowOpenRoles(true);
+                setSelected(id);
+                setShowPanel(true);
+                searchSelect(id);
+              }}
+              onEdit={
+                session.role === "admin"
+                  ? (person) =>
+                      setEditor({ sheet: "Employees", record: person })
+                  : undefined
+              }
+            />
+          )}
           {page === "model" && (
             <ModelPage
               data={data}
@@ -944,6 +1078,16 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  {view === "people" && (
+                    <label className="open-roles-toggle">
+                      <input
+                        type="checkbox"
+                        checked={showOpenRoles}
+                        onChange={(e) => toggleOpenRoles(e.target.checked)}
+                      />
+                      Show open roles
+                    </label>
+                  )}
                   <label className="color-tier-picker">
                     <span>Color by</span>
                     <select
@@ -998,9 +1142,15 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              {view === "people" && !showOpenRoles && (
+                <p className="open-role-filter-note">
+                  Open roles hidden. Dashed connections bypass vacant managers
+                  for this view; saved reporting lines stay the same.
+                </p>
+              )}
               <div className={`board-body ${showPanel ? "with-panel" : ""}`}>
                 <OrgChart
-                  data={data}
+                  data={chartData!}
                   view={view}
                   selected={selected}
                   onSelect={(id) => {
@@ -1023,7 +1173,9 @@ export default function App() {
                         <div className="detail-topline">
                           <span>
                             {view === "people"
-                              ? "PERSON OVERVIEW"
+                              ? person?.EmploymentStatus === "vacant"
+                                ? "OPEN ROLE"
+                                : "PERSON OVERVIEW"
                               : "UNIT OVERVIEW"}
                           </span>
                           <button
@@ -1086,6 +1238,8 @@ export default function App() {
                                 <BriefcaseBusiness size={14} />
                                 {person!.EmploymentType ||
                                   "Employment type not provided"}{" "}
+                                {person!.ExemptionStatus &&
+                                  ` · ${person!.ExemptionStatus}`}{" "}
                                 · {person!.FTE} FTE
                               </span>
                             </>
@@ -1217,6 +1371,19 @@ export default function App() {
                               </p>
                             </>
                           )}
+                          {view === "people" && session.role === "admin" && (
+                            <button
+                              className="text-button"
+                              onClick={() =>
+                                setEditor({
+                                  sheet: "Employees",
+                                  record: person!,
+                                })
+                              }
+                            >
+                              Edit person
+                            </button>
+                          )}
                           {view === "people" && session.canViewCompensation && (
                             <button
                               className="text-button"
@@ -1240,39 +1407,54 @@ export default function App() {
                             <div className="comp-history">
                               {comp.length ? (
                                 comp.map((c) => (
-                                  <p key={c.EffectiveFrom}>
-                                    <strong>
-                                      {money(
-                                        Number(c.AnnualBasePay) +
-                                          Number(c.AnnualTargetBonus) +
-                                          Number(c.AnnualEmployerCosts),
-                                        c.Currency,
-                                      )}
-                                    </strong>
-                                    <small>
-                                      Base{" "}
-                                      {money(
-                                        Number(c.AnnualBasePay),
-                                        c.Currency,
-                                      )}{" "}
-                                      + bonus{" "}
-                                      {money(
-                                        Number(c.AnnualTargetBonus),
-                                        c.Currency,
-                                      )}{" "}
-                                      + employer costs{" "}
-                                      {money(
-                                        Number(c.AnnualEmployerCosts),
-                                        c.Currency,
-                                      )}
-                                      <br />
-                                      {c.EffectiveFrom} –{" "}
-                                      {c.EffectiveTo || "ongoing"}
-                                    </small>
-                                  </p>
+                                  <div key={c.EffectiveFrom}>
+                                    <p>
+                                      <strong>
+                                        {c.AnnualTotal == null
+                                          ? "Annual payroll unknown"
+                                          : money(c.AnnualTotal, c.Currency)}
+                                      </strong>
+                                      <small>
+                                        {c.PayBasis === "hourly"
+                                          ? `${money(Number(c.HourlyRate), c.Currency)}/hour × ${c.AnnualHours || "unknown"} hours/year`
+                                          : c.PayBasis === "monthly"
+                                            ? `${money(Number(c.MonthlyRate), c.Currency)}/month`
+                                            : `Annual salary ${money(Number(c.AnnualBasePay), c.Currency)} + annual bonus ${money(Number(c.AnnualTargetBonus), c.Currency)}`}
+                                        {Number(c.AnnualEmployerCosts) > 0 &&
+                                          ` + employer costs ${money(Number(c.AnnualEmployerCosts), c.Currency)}`}
+                                        <br />
+                                        {c.EffectiveFrom} –{" "}
+                                        {c.EffectiveTo || "ongoing"}
+                                      </small>
+                                    </p>
+                                    {(c.PayBasis ||
+                                      compensationBasis(person!)) && (
+                                      <button
+                                        className="text-button"
+                                        onClick={() =>
+                                          editCompensation(person!, c)
+                                        }
+                                      >
+                                        Edit compensation
+                                      </button>
+                                    )}
+                                  </div>
                                 ))
                               ) : (
                                 <p>Compensation unknown.</p>
+                              )}
+                              {compensationBasis(person!) ? (
+                                <button
+                                  className="text-button"
+                                  onClick={() => editCompensation(person!)}
+                                >
+                                  Add compensation period
+                                </button>
+                              ) : (
+                                <p>
+                                  Set Employment Type and FTE classification in
+                                  Model settings before entering compensation.
+                                </p>
                               )}
                             </div>
                           )}

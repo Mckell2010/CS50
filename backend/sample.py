@@ -121,7 +121,8 @@ def sample_state(count=30):
             "StartDate": "2025-01-01",
             "EndDate": "",
             "Location": "Los Angeles - HQ" if i % 3 else "Remote",
-            "EmploymentType": "Full time",
+            "EmploymentType": "FTE",
+            "ExemptionStatus": "exempt",
             "_source": "excel",
         }
         state["Employees"][ident] = row
@@ -286,7 +287,7 @@ def workbook_bytes(state=None, synthetic=False):
             "IDs are text. Preserve leading zeros. Dates use YYYY-MM-DD. Currency defaults to USD; annual budgets use calendar years."
         ],
         [
-            "Pay fields are actual annual amounts at contracted FTE. Do not multiply by FTE again. Blank pay means unknown."
+            "PayBasis: salary (annual base + annual bonus), hourly (HourlyRate x AnnualHours), monthly (MonthlyRate x 12). Blank PayBasis retains legacy annual amounts. Never multiply pay by FTE again."
         ],
         ["Employees and OrganizationalUnits are required. Other sheets are optional."],
         [
@@ -303,7 +304,7 @@ def workbook_bytes(state=None, synthetic=False):
             "App-owned planning records are preserved. Resolve conflicts in the planning editor."
         ],
         [
-            "EmploymentStatus: active / leave / inactive. UnitType: company / function / group / department / team / subteam / subdepartment."
+            "EmploymentType: FTE or Contractor; FTE ExemptionStatus: exempt or non-exempt. EmploymentStatus: active / leave / inactive / vacant / draft. UnitType: company / function / group / department / team / subteam / subdepartment."
         ],
         [
             "Objective Status: on-track / at-risk / off-track / complete / not-started. Direction: increase / decrease."

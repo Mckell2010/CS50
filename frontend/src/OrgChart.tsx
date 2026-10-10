@@ -24,6 +24,7 @@ import {
   Focus,
   LockKeyhole,
   ArrowUpRight,
+  BriefcaseBusiness,
 } from "lucide-react";
 import type { Organization, Person, Unit, RecordData } from "./types";
 import { initials, money } from "./types";
@@ -55,9 +56,10 @@ type CardData = {
 };
 const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
   const d = data;
+  const vacant = !d.unit && d.item.EmploymentStatus === "vacant";
   return (
     <div
-      className={`org-node ${d.selected ? "selected" : ""}`}
+      className={`org-node ${d.selected ? "selected" : ""} ${vacant ? "open-role-node" : ""}`}
       data-color-category={d.colorCategory}
       title={d.colorLabel}
       style={
@@ -75,7 +77,13 @@ const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
         aria-label={`Select ${d.title}`}
       >
         <div className={`avatar ${d.unit ? "unit-avatar" : ""}`}>
-          {d.unit ? <Building2 size={20} /> : initials(d.title)}
+          {d.unit ? (
+            <Building2 size={20} />
+          ) : vacant ? (
+            <BriefcaseBusiness size={20} />
+          ) : (
+            initials(d.title)
+          )}
         </div>
         <div className="node-text">
           <strong>{d.title}</strong>
@@ -93,7 +101,7 @@ const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
         <div className="company-allocation compact">
           <span className="allocation-label">
             {d.item.EmploymentStatus === "vacant"
-              ? "Open position · excluded from headcount"
+              ? "OPEN ROLE · Unfilled position"
               : "Draft · employment details needed"}
           </span>
         </div>
@@ -353,7 +361,12 @@ function ChartInner({
           source: r[parentField],
           target: id,
           type: "smoothstep",
-          style: { stroke: "#aeb2b5", strokeWidth: 1.4 },
+          style: {
+            stroke: "#aeb2b5",
+            strokeWidth: 1.4,
+            strokeDasharray: r.hiddenVacantManager ? "6 4" : undefined,
+          },
+          label: r.hiddenVacantManager ? "via open role" : undefined,
         });
       }
     });

@@ -394,6 +394,8 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             ).click()
             page.get_by_label("Name", exact=True).fill("Synthetic draft position")
             page.get_by_label("Job Title", exact=True).fill("Demo role")
+            page.get_by_label("Employment Type", exact=True).select_option("FTE")
+            page.get_by_label("FTE classification", exact=True).select_option("exempt")
             page.get_by_role("button", name="Save changes", exact=True).click()
             expect(page.get_by_role("dialog")).to_have_count(0)
             page.get_by_label("Find model people").fill("Synthetic draft position")
@@ -483,6 +485,208 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             ), "Tier OKR mobile overflow"
             mark(
                 "Tiered budgets unlock after parent save; OKRs link to the parent unit objective; both work on mobile"
+            )
+            page.set_viewport_size({"width": 1440, "height": 1100})
+            page.get_by_role("button", name="Organization", exact=True).click()
+            page.get_by_role("textbox", name="Search organization").fill("Finn Young")
+            page.get_by_role("option").filter(has_text="Finn Young").click()
+            page.get_by_role("button", name="Edit person", exact=True).click()
+            employment = page.get_by_label("Employment Type", exact=True)
+            assert employment.locator("option").all_text_contents() == [
+                "Select…",
+                "FTE",
+                "Contractor",
+            ]
+            page.get_by_label("FTE classification", exact=True).select_option(
+                "non-exempt"
+            )
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            page.get_by_role(
+                "button", name="View individual compensation", exact=False
+            ).click()
+            page.get_by_role("button", name="Edit compensation", exact=True).click()
+            expect(
+                page.get_by_label("Expected annual hours", exact=True)
+            ).to_have_value("2080")
+            expect(page.get_by_label("Annual salary", exact=True)).to_have_count(0)
+            expect(page.get_by_label("Monthly Rate", exact=True)).to_have_count(0)
+            page.get_by_label("Hourly Rate", exact=True).fill("30")
+            page.get_by_label("Expected annual hours", exact=True).fill("1000")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            pay = page.request.get(BASE + "/api/people/030/compensation").json()[0]
+            assert pay["HourlyRate"] == "30" and pay["AnnualHours"] == "1000"
+            assert (
+                pay["AnnualTotal"] == 55000
+            )  # Includes retained 25,000 legacy employer costs.
+            page.get_by_role("button", name="Edit person", exact=True).click()
+            page.get_by_label("Employment Type", exact=True).select_option("Contractor")
+            expect(page.get_by_label("FTE classification", exact=True)).to_have_count(0)
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            page.get_by_role(
+                "button", name="View individual compensation", exact=False
+            ).click()
+            page.get_by_role(
+                "button", name="Add compensation period", exact=True
+            ).click()
+            expect(page.get_by_label("Monthly Rate", exact=True)).to_be_visible()
+            expect(page.get_by_label("Hourly Rate", exact=True)).to_have_count(0)
+            expect(page.get_by_label("Annual salary", exact=True)).to_have_count(0)
+            page.get_by_role("button", name="Close editor", exact=True).click()
+            mark(
+                "Employment controls switch fields; editable hourly assumptions persist and update payroll"
+            )
+
+            # Seed synthetic vacancies, including a vacant manager with a filled report.
+            graph = page.request.get(BASE + "/api/organization").json()
+            version = graph["version"]
+            for ident, manager, department in [
+                ("open-check", "001", "platform"),
+                ("open-other", "002", "vehicle"),
+            ]:
+                row = dict(
+                    EmployeeID=ident,
+                    Name="Open " + ident,
+                    JobTitle="Synthetic open engineer",
+                    ManagerID=manager,
+                    OrgUnitID=department,
+                    EmploymentStatus="vacant",
+                    FTE="0",
+                    EmploymentType="FTE",
+                    ExemptionStatus="exempt",
+                    Location="Remote",
+                )
+                result = page.request.put(
+                    BASE + "/api/planning/Employees/" + ident,
+                    data={"version": version, "record": row},
+                )
+                assert result.status == 200, result.text()
+                version = result.json()["version"]
+            person = next(p for p in graph["employees"] if p["EmployeeID"] == "030")
+            person["ManagerID"] = "open-check"
+            result = page.request.put(
+                BASE + "/api/planning/Employees/030",
+                data={"version": version, "record": person},
+            )
+            assert result.status == 200, result.text()
+            page.reload()
+            page.get_by_role("button", name="Open roles", exact=False).first.click()
+            expect(
+                page.get_by_role("heading", name="Open roles", exact=True)
+            ).to_be_visible()
+            expect(page.locator(".open-role-card")).to_have_count(2)
+            expect(page.locator(".open-role-group h2").first).to_contain_text(
+                "Alex Morgan"
+            )
+            page.get_by_label("Group open roles by").select_option("department")
+            expect(page.locator(".open-role-group h2").first).to_contain_text(
+                "Platform & software"
+            )
+            page.screenshot(
+                path=str(ARTIFACTS / "open-roles-desktop.png"), full_page=True
+            )
+            page.get_by_label("Search open roles").fill("open-check")
+            expect(page.locator(".open-role-card")).to_have_count(1)
+            page.get_by_role("button", name="View in organization", exact=True).click()
+            expect(page.locator(".open-role-node.selected")).to_have_count(1)
+            page.get_by_label("Show open roles", exact=True).uncheck()
+            expect(page.locator(".open-role-node")).to_have_count(0)
+            page.get_by_role("textbox", name="Search organization").fill("Finn Young")
+            page.get_by_role("option").filter(has_text="Finn Young").click()
+            expect(
+                page.get_by_role("button", name="Select Finn Young", exact=True)
+            ).to_be_visible()
+            assert (
+                next(
+                    p
+                    for p in page.request.get(BASE + "/api/organization").json()[
+                        "employees"
+                    ]
+                    if p["EmployeeID"] == "030"
+                )["ManagerID"]
+                == "open-check"
+            )
+            page.get_by_label("Show open roles", exact=True).check()
+            page.get_by_role("textbox", name="Search organization").fill("open-check")
+            page.get_by_role("option").filter(has_text="open-check").click()
+            expect(page.locator(".open-role-node.selected")).to_have_count(1)
+            mark(
+                "Open roles group and search by manager/department; hiding vacancies preserves filled reports and saved managers"
+            )
+
+            page.get_by_role("button", name="Org structure", exact=True).click()
+            platform = page.locator('[data-structure-unit="platform"]')
+            platform.get_by_role("button", name="Add child tier", exact=True).click()
+            page.get_by_label("Org Unit Name", exact=True).fill(
+                "Synthetic verification team"
+            )
+            expect(page.get_by_label("Tier", exact=True)).to_have_value("4")
+            page.get_by_label("Department Code", exact=True).fill("12")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            team = page.locator(".structure-row").filter(
+                has=page.get_by_role(
+                    "heading", name="Synthetic verification team", exact=True
+                )
+            )
+            team.get_by_role("button", name="Add child tier", exact=True).click()
+            page.get_by_label("Org Unit Name", exact=True).fill(
+                "Synthetic verification subteam"
+            )
+            expect(page.get_by_label("Tier", exact=True)).to_have_value("5")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            team.get_by_role("button", name="Edit / move", exact=True).click()
+            page.get_by_label("Parent Org Unit ID", exact=True).select_option("vehicle")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            graph = page.request.get(BASE + "/api/organization").json()
+            unit = next(
+                u
+                for u in graph["units"]
+                if u["OrgUnitName"] == "Synthetic verification team"
+            )
+            assert (
+                unit["ParentOrgUnitID"] == "vehicle" and unit["DepartmentCode"] == "12"
+            )
+            team.get_by_role(
+                "button", name="Delete unit Synthetic verification team", exact=True
+            ).click()
+            page.get_by_role("checkbox", name="Remove this level", exact=False).check()
+            page.get_by_role("button", name="Confirm deletion", exact=True).click()
+            expect(
+                page.get_by_role(
+                    "heading", name="Synthetic verification team", exact=True
+                )
+            ).to_have_count(0)
+            graph = page.request.get(BASE + "/api/organization").json()
+            assert (
+                next(
+                    u
+                    for u in graph["units"]
+                    if u["OrgUnitName"] == "Synthetic verification subteam"
+                )["ParentOrgUnitID"]
+                == "vehicle"
+            )
+            platform.get_by_role(
+                "button", name="Delete unit Platform & software", exact=True
+            ).click()
+            page.get_by_role("button", name="Confirm deletion", exact=True).click()
+            expect(page.get_by_role("alert")).to_contain_text(
+                "Reassign this unit's records"
+            )
+            page.get_by_role("button", name="Cancel deletion", exact=True).click()
+            page.set_viewport_size({"width": 390, "height": 844})
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), "Structure mobile overflow"
+            page.screenshot(
+                path=str(ARTIFACTS / "structure-mobile.png"), full_page=True
+            )
+            mark(
+                "Structure creates tiers, moves branches, safely removes empty levels and blocks deletion of assigned records"
             )
             assert not errors, errors
             mark("No browser runtime errors")

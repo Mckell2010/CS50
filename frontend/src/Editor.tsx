@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Check, AlertTriangle } from "lucide-react";
 import { api, type Organization, type RecordData } from "./types";
+import { unitTier } from "./orgColors";
 const LOCATION_OPTIONS = [
   "Los Angeles - HQ",
   "Los Angeles - LB",
@@ -19,9 +20,21 @@ export const FIELDS: Record<string, string[]> = {
     "StartDate",
     "EndDate",
     "EmploymentType",
+    "ExemptionStatus",
     "Location",
     "SourceCompany",
     "FTEBasis",
+  ],
+  Compensation: [
+    "EmployeeID",
+    "EffectiveFrom",
+    "EffectiveTo",
+    "Currency",
+    "AnnualBasePay",
+    "AnnualTargetBonus",
+    "HourlyRate",
+    "AnnualHours",
+    "MonthlyRate",
   ],
   CompanyAllocations: ["EmployeeID", "DivergentPercent"],
   OrganizationalUnits: [
@@ -66,6 +79,7 @@ export const FIELDS: Record<string, string[]> = {
 };
 const TITLES: Record<string, string> = {
   Employees: "Person / position",
+  Compensation: "Compensation",
   CompanyAllocations: "Contributor company allocation",
   OrganizationalUnits: "Organizational unit",
   Budgets: "Budget allocation",
@@ -73,7 +87,14 @@ const TITLES: Record<string, string> = {
   KeyResults: "Key result",
 };
 const label = (s: string) =>
-  s
+  (
+    ({
+      AnnualBasePay: "Annual salary",
+      AnnualTargetBonus: "Annual bonus",
+      AnnualHours: "Expected annual hours",
+      ExemptionStatus: "FTE classification",
+    })[s] || s
+  )
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace("ID", " ID")
     .replace(/\s+/g, " ");
@@ -99,7 +120,7 @@ export default function Editor({
     setError("");
     try {
       await api(
-        `/planning/${sheet}/${encodeURIComponent(form[FIELDS[sheet][0]])}`,
+        `/planning/${sheet}/${encodeURIComponent(sheet === "Compensation" ? `${form.EmployeeID}@${form.EffectiveFrom}` : form[FIELDS[sheet][0]])}`,
         {
           method: "PUT",
           body: JSON.stringify({ version: data.version, record: form }),
@@ -156,6 +177,17 @@ export default function Editor({
               tier. Child budgets are included in the parent total.
             </p>
           )}
+          {sheet === "OrganizationalUnits" && (
+            <p className="notice">
+              Parent Org Unit places this unit in the budget hierarchy; it does
+              not change anyone’s reporting manager. Use Tier 0 for companies, 1
+              functions, 2 groups, 3 departments, 4 teams, and 5 or deeper for
+              subteams. Department Code identifies the department independently
+              of its name.
+              {record.ParentOrgUnitID !== form.ParentOrgUnitID &&
+                " Moving this unit moves its full subtree. Existing budgets and OKRs stay with their units; review budget envelopes and objective alignment after the move."}
+            </p>
+          )}
           {sheet === "CompanyAllocations" && (
             <p className="notice">
               {
@@ -166,8 +198,32 @@ export default function Editor({
               team composition of every manager above them.
             </p>
           )}
+          {sheet === "Compensation" && (
+            <p className="notice">
+              {form.PayBasis === "hourly"
+                ? "Non-exempt FTE · Hourly rate × expected annual hours. Hours default to 2,080; edit them for the actual schedule. Overtime is not included."
+                : form.PayBasis === "monthly"
+                  ? "Contractor · Monthly rate × 12 for annual payroll."
+                  : "Exempt FTE · Annual salary plus annual bonus."}
+              {Number(form.AnnualEmployerCosts) > 0 &&
+                ` Existing annual employer costs (${form.Currency} ${form.AnnualEmployerCosts}) are retained separately.`}{" "}
+              Pay amounts are not multiplied by the FTE allocation again.
+              Effective periods cannot overlap.
+            </p>
+          )}
           <div className="editor-grid">
             {FIELDS[sheet].map((field, i) => {
+              if (field === "ExemptionStatus" && form.EmploymentType !== "FTE")
+                return null;
+              if (
+                sheet === "Compensation" &&
+                ((["AnnualBasePay", "AnnualTargetBonus"].includes(field) &&
+                  form.PayBasis !== "salary") ||
+                  (["HourlyRate", "AnnualHours"].includes(field) &&
+                    form.PayBasis !== "hourly") ||
+                  (field === "MonthlyRate" && form.PayBasis !== "monthly"))
+              )
+                return null;
               let options: { value: string; label: string }[] | undefined;
               if (
                 (field === "OrgUnitID" && sheet !== "OrganizationalUnits") ||
@@ -227,6 +283,16 @@ export default function Editor({
                   "vacant",
                   "draft",
                 ].map((value) => ({ value, label: value }));
+              if (field === "EmploymentType")
+                options = ["FTE", "Contractor"].map((value) => ({
+                  value,
+                  label: value,
+                }));
+              if (field === "ExemptionStatus")
+                options = [
+                  { value: "exempt", label: "Exempt" },
+                  { value: "non-exempt", label: "Non-exempt" },
+                ];
               if (field === "Location")
                 options = LOCATION_OPTIONS.map((value) => ({
                   value,
@@ -265,8 +331,10 @@ export default function Editor({
               const props = {
                 "aria-label": label(field),
                 value:
-                  field === "Location" &&
-                  !LOCATION_OPTIONS.includes(form[field])
+                  (field === "Location" &&
+                    !LOCATION_OPTIONS.includes(form[field])) ||
+                  (field === "EmploymentType" &&
+                    !["FTE", "Contractor"].includes(form[field]))
                     ? ""
                     : (form[field] ?? ""),
                 onChange: (
@@ -277,6 +345,33 @@ export default function Editor({
                   setForm((f) => ({
                     ...f,
                     [field]: e.target.value,
+                    ...(field === "EmploymentType"
+                      ? { ExemptionStatus: "" }
+                      : {}),
+                    ...(sheet === "OrganizationalUnits" && field === "UnitType"
+                      ? {
+                          Tier: String(
+                            (
+                              {
+                                company: 0,
+                                function: 1,
+                                group: 2,
+                                department: 3,
+                                team: 4,
+                                subdepartment: 4,
+                              } as Record<string, number>
+                            )[e.target.value] ??
+                              Math.max(
+                                5,
+                                (unitTier(
+                                  data.units.find(
+                                    (u) => u.OrgUnitID === f.ParentOrgUnitID,
+                                  ) || ({ UnitType: "company" } as any),
+                                ) ?? 0) + 1,
+                              ),
+                          ),
+                        }
+                      : {}),
                     ...(sheet === "Objectives" && field === "OrgUnitID"
                       ? { ParentObjectiveID: "" }
                       : {}),
@@ -299,8 +394,24 @@ export default function Editor({
                         listed locations to replace it.
                       </small>
                     )}
+                  {field === "EmploymentType" &&
+                    form.EmploymentType &&
+                    !["FTE", "Contractor"].includes(form.EmploymentType) && (
+                      <small>
+                        Imported type: {form.EmploymentType}. Choose FTE or
+                        Contractor to classify compensation.
+                      </small>
+                    )}
                   {options ? (
-                    <select {...props} required={field === "DivergentPercent"}>
+                    <select
+                      {...props}
+                      required={
+                        field === "DivergentPercent" ||
+                        field === "ExemptionStatus" ||
+                        (field === "Currency" && sheet === "Compensation") ||
+                        (field === "EmploymentType" && !record.EmploymentType)
+                      }
+                    >
                       <option value="">Select…</option>
                       {options.map((o) => (
                         <option key={o.value} value={o.value}>
@@ -313,7 +424,12 @@ export default function Editor({
                   ) : (
                     <input
                       {...props}
-                      readOnly={i === 0}
+                      readOnly={
+                        i === 0 ||
+                        (sheet === "Compensation" &&
+                          field === "EffectiveFrom" &&
+                          !!record.existing)
+                      }
                       type={
                         [
                           "PeriodStart",
@@ -321,10 +437,17 @@ export default function Editor({
                           "LastUpdated",
                           "StartDate",
                           "EndDate",
+                          "EffectiveFrom",
+                          "EffectiveTo",
                         ].includes(field)
                           ? "date"
                           : [
                                 "FTE",
+                                "AnnualBasePay",
+                                "AnnualTargetBonus",
+                                "HourlyRate",
+                                "AnnualHours",
+                                "MonthlyRate",
                                 "Tier",
                                 "BudgetYear",
                                 "ApprovedEnvelope",
@@ -337,9 +460,15 @@ export default function Editor({
                             : "text"
                       }
                       step={field === "Tier" ? "1" : "any"}
-                      min={field === "Tier" ? 0 : undefined}
+                      min={
+                        field === "Tier" || sheet === "Compensation"
+                          ? 0
+                          : undefined
+                      }
                       required={
-                        i === 0 || ["OrgUnitName", "MetricName"].includes(field)
+                        i === 0 ||
+                        ["OrgUnitName", "MetricName"].includes(field) ||
+                        (sheet === "Compensation" && field !== "EffectiveTo")
                       }
                     />
                   )}
