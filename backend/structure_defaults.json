@@ -1,0 +1,153 @@
+{
+  "functions": [
+    {
+      "CatalogID": "czinger-commercial",
+      "Company": "Czinger Vehicles",
+      "Function": "Commercial"
+    },
+    {
+      "CatalogID": "czinger-engineering",
+      "Company": "Czinger Vehicles",
+      "Function": "Engineering"
+    },
+    {
+      "CatalogID": "czinger-production",
+      "Company": "Czinger Vehicles",
+      "Function": "Production"
+    },
+    {
+      "CatalogID": "divergent-commercial",
+      "Company": "Divergent Technologies, Inc.",
+      "Function": "Commercial"
+    },
+    {
+      "CatalogID": "divergent-technology-development",
+      "Company": "Divergent Technologies, Inc.",
+      "Function": "Technology Development"
+    },
+    {
+      "CatalogID": "divergent-operations-application-development",
+      "Company": "Divergent Technologies, Inc.",
+      "Function": "Operations and Application Development"
+    },
+    {
+      "CatalogID": "divergent-finance",
+      "Company": "Divergent Technologies, Inc.",
+      "Function": "Finance"
+    },
+    {
+      "CatalogID": "divergent-legal",
+      "Company": "Divergent Technologies, Inc.",
+      "Function": "Legal"
+    },
+    {
+      "CatalogID": "divergent-people-ops",
+      "Company": "Divergent Technologies, Inc.",
+      "Function": "People Ops"
+    }
+  ],
+  "groups": [
+    {
+      "CatalogID": "government-relations",
+      "ParentFunctionID": "divergent-commercial",
+      "Group": "Government Relations"
+    },
+    {
+      "CatalogID": "contracts-capture",
+      "ParentFunctionID": "divergent-commercial",
+      "Group": "Contracts and Capture"
+    },
+    {
+      "CatalogID": "business-development-sales",
+      "ParentFunctionID": "divergent-commercial",
+      "Group": "Business Development and Sales"
+    },
+    {
+      "CatalogID": "product-engineering",
+      "ParentFunctionID": "divergent-operations-application-development",
+      "Group": "Product Engineering"
+    },
+    {
+      "CatalogID": "manufacturing-production",
+      "ParentFunctionID": "divergent-operations-application-development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "CatalogID": "quality-reliability-ehs",
+      "ParentFunctionID": "divergent-operations-application-development",
+      "Group": "Quality, Reliability and EHS"
+    },
+    {
+      "CatalogID": "program-management",
+      "ParentFunctionID": "divergent-operations-application-development",
+      "Group": "Program Management"
+    },
+    {
+      "CatalogID": "supply-chain",
+      "ParentFunctionID": "divergent-operations-application-development",
+      "Group": "Supply Chain"
+    }
+  ],
+  "departments": [
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "44-Quality Operations",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "41-Production Management",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "12-Structures Engineering",
+      "Function": "Operations and Application Development",
+      "Group": "Product Engineering"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "42-AM Production",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "43-AM Post-Processing Production",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "46-Machining Production",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "18-Manufacturing Engineering",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Czinger Vehicles",
+      "SourceLabel": "12-Structures Engineering - CZV",
+      "Function": "Engineering",
+      "Group": ""
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "45-General Post-Processing Production",
+      "Function": "Operations and Application Development",
+      "Group": "Manufacturing and Production"
+    },
+    {
+      "Company": "Divergent Technologies, Inc.",
+      "SourceLabel": "19-Test Engineering",
+      "Function": "Operations and Application Development",
+      "Group": "Product Engineering"
+    }
+  ]
+}

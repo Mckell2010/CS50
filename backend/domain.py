@@ -11,6 +11,8 @@ COLUMNS = {
         "ParentOrgUnitID",
         "UnitType",
         "OwnerEmployeeID",
+        "Tier",
+        "DepartmentCode",
     ],
     "Employees": [
         "EmployeeID",
@@ -24,7 +26,10 @@ COLUMNS = {
         "EndDate",
         "Location",
         "EmploymentType",
+        "SourceCompany",
+        "FTEBasis",
     ],
+    "CompanyAllocations": ["EmployeeID", "DivergentPercent"],
     "Compensation": [
         "EmployeeID",
         "EffectiveFrom",
@@ -77,6 +82,7 @@ REQUIRED = {
         "FTE",
         "StartDate",
     ],
+    "CompanyAllocations": ["EmployeeID", "DivergentPercent"],
     "Compensation": [
         "EmployeeID",
         "EffectiveFrom",
@@ -112,6 +118,8 @@ REQUIRED = {
     ],
 }
 APP_FIELDS = {
+    "Employees": set(COLUMNS["Employees"]),
+    "CompanyAllocations": set(COLUMNS["CompanyAllocations"]),
     "OrganizationalUnits": set(COLUMNS["OrganizationalUnits"]),
     "Budgets": set(COLUMNS["Budgets"]),
     "Objectives": set(COLUMNS["Objectives"]),
@@ -207,6 +215,7 @@ def validate(state):
             "ParentOrgUnitID": "OrganizationalUnits",
             "OwnerEmployeeID": "Employees",
         },
+        "CompanyAllocations": {"EmployeeID": "Employees"},
         "Compensation": {"EmployeeID": "Employees"},
         "Budgets": {"OrgUnitID": "OrganizationalUnits"},
         "Objectives": {
@@ -219,6 +228,14 @@ def validate(state):
     for sheet, records in state.items():
         for key, row in records.items():
             for field in REQUIRED[sheet]:
+                if sheet == "Employees" and (
+                    field == "FTE"
+                    or (
+                        field == "StartDate"
+                        and row.get("EmploymentStatus") in {"vacant", "draft"}
+                    )
+                ):
+                    continue
                 if row.get(field, "") == "":
                     err(sheet, row, field, "Required value is missing")
             for field, target in refs.get(sheet, {}).items():
@@ -296,24 +313,82 @@ def validate(state):
                 "INR",
             }:
                 err(sheet, row, "Currency", "Unsupported currency code")
+            if sheet == "CompanyAllocations":
+                try:
+                    if number(row.get("DivergentPercent", "")) not in {
+                        0,
+                        25,
+                        50,
+                        75,
+                        100,
+                    }:
+                        raise ValueError()
+                except (InvalidOperation, ValueError):
+                    err(
+                        sheet,
+                        row,
+                        "DivergentPercent",
+                        "Choose 0, 25, 50, 75, or 100 percent; Czinger receives the remainder",
+                    )
             if sheet == "Employees" and row.get("EmploymentStatus") not in {
                 "active",
                 "leave",
                 "inactive",
+                "vacant",
+                "draft",
             }:
-                err(sheet, row, "EmploymentStatus", "Use active, leave, or inactive")
+                err(
+                    sheet,
+                    row,
+                    "EmploymentStatus",
+                    "Use active, leave, inactive, vacant, or draft",
+                )
             if sheet == "OrganizationalUnits" and row.get("UnitType") not in {
                 "company",
+                "function",
                 "group",
                 "department",
+                "team",
+                "subteam",
                 "subdepartment",
             }:
                 err(
                     sheet,
                     row,
                     "UnitType",
-                    "Use company, group, department, or subdepartment",
+                    "Use company, function, group, department, team, subteam, or subdepartment",
                 )
+            if sheet == "OrganizationalUnits" and row.get("Tier", "") != "":
+                try:
+                    tier = number(row["Tier"])
+                    if tier < 0 or tier != int(tier):
+                        raise ValueError()
+                    expected = {
+                        "company": 0,
+                        "function": 1,
+                        "group": 2,
+                        "department": 3,
+                        "team": 4,
+                    }.get(row.get("UnitType"))
+                    if expected is not None and tier != expected:
+                        err(
+                            sheet,
+                            row,
+                            "Tier",
+                            f"{row['UnitType']} must use Tier {expected}",
+                        )
+                    if row.get("UnitType") == "subteam" and tier < 5:
+                        err(sheet, row, "Tier", "Subteams must use Tier 5 or deeper")
+                    parent = state[sheet].get(row.get("ParentOrgUnitID"), {})
+                    if parent.get("Tier", "") != "" and tier <= number(parent["Tier"]):
+                        err(
+                            sheet,
+                            row,
+                            "Tier",
+                            "Tier must be deeper than the parent tier",
+                        )
+                except (InvalidOperation, ValueError, OverflowError):
+                    err(sheet, row, "Tier", "Use a nonnegative whole tier number")
             if sheet == "Objectives" and row.get("Status") not in {
                 "on-track",
                 "at-risk",
@@ -418,16 +493,22 @@ def validate(state):
                 "Duplicate budget for this unit, year, and currency",
             )
         budgets.add(key)
+    managers = {e.get("ManagerID") for e in state["Employees"].values()}
+    dormant = sum(key in managers for key in state.get("CompanyAllocations", {}))
+    if dormant:
+        warnings.append(
+            f"{dormant} former contributor allocation(s) are retained but ignored for managers; manager splits are calculated from contributors."
+        )
     return errors, warnings
 
 
 def merge_import(current, incoming, mode, actor):
-    merged = copy.deepcopy(current)
+    merged = {**empty_state(), **copy.deepcopy(current)}
     changes = []
     conflicts = []
     for sheet, records in incoming.items():
         for key, row in records.items():
-            old = current[sheet].get(key)
+            old = current.get(sheet, {}).get(key)
             comparable = lambda x: {
                 f: clean_value(x.get(f, "")) for f in COLUMNS[sheet]
             }
@@ -519,14 +600,19 @@ def payroll(state, employee_ids, as_of, currency):
             other += 1
         else:
             total += sum(cents(c[f]) for f in MONEY[:3])
-    return {
+    result = {
         "headcount": len(people),
-        "fte": float(sum((number(e["FTE"]) for e in people), Decimal(0))),
+        "fte": float(sum((number(e.get("FTE") or 0) for e in people), Decimal(0))),
         "payroll": total / 100,
         "missingPay": missing,
         "otherCurrency": other,
         "complete": not (missing or other),
     }
+
+    missing_fte = sum(e.get("FTE", "") == "" for e in people)
+    if missing_fte:
+        result["missingFTE"] = missing_fte
+    return result
 
 
 def kr_progress(row, as_of):
@@ -547,7 +633,7 @@ def kr_progress(row, as_of):
     return result
 
 
-def budget_metrics(state, unit, year, currency, as_of):
+def budget_metrics(state, unit, year, currency, as_of, executive_ids=()):
     rows = {
         r["OrgUnitID"]: r
         for r in state["Budgets"].values()
@@ -557,6 +643,13 @@ def budget_metrics(state, unit, year, currency, as_of):
     units = descendants(state["OrganizationalUnits"], "ParentOrgUnitID", unit)
     people = {k for k, e in state["Employees"].items() if e["OrgUnitID"] in units}
     direct = {k for k, e in state["Employees"].items() if e["OrgUnitID"] == unit}
+    pool = set(executive_ids) & people
+    if state["OrganizationalUnits"][unit].get("UnitType") == "company":
+        # Executive costs roll up once at company level, outside operating departments.
+        direct |= pool
+    else:
+        people -= pool
+        direct -= pool
     result = {
         "total": payroll(state, people, as_of, currency),
         "direct": payroll(state, direct, as_of, currency),

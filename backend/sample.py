@@ -266,15 +266,21 @@ def sample_state(count=30):
     return state
 
 
-def workbook_bytes(state=None):
+def workbook_bytes(state=None, synthetic=False):
     wb = Workbook()
     info = wb.active
     info.title = "Read me"
     notes = [
         ["DIVERGENT • ORGANIZATION WORKBOOK"],
-        ["SYNTHETIC SAMPLE DATA" if state else "EMPTY IMPORT TEMPLATE"],
         [
-            "Only the example CEO name is provided by the brief; all other people, pay, relationships, and objectives are invented."
+            (
+                "SYNTHETIC SAMPLE DATA"
+                if synthetic
+                else "ORGANIZATION DATA" if state else "EMPTY IMPORT TEMPLATE"
+            )
+        ],
+        [
+            "Synthetic examples use invented people and data except the named example CEO. Actual exports retain the imported records."
         ],
         [
             "IDs are text. Preserve leading zeros. Dates use YYYY-MM-DD. Currency defaults to USD; annual budgets use calendar years."
@@ -283,6 +289,12 @@ def workbook_bytes(state=None):
             "Pay fields are actual annual amounts at contracted FTE. Do not multiply by FTE again. Blank pay means unknown."
         ],
         ["Employees and OrganizationalUnits are required. Other sheets are optional."],
+        [
+            "CompanyAllocations: EmployeeID and DivergentPercent (0, 25, 50, 75, 100). Set individual contributors only. Czinger gets the remainder."
+        ],
+        [
+            "Manager splits are calculated using FTE-weighted downstream contributors; they describe team composition only, not manager payroll."
+        ],
         ["EffectiveTo and EndDate are inclusive. Compensation periods cannot overlap."],
         [
             "Import defaults to incremental updates; omitted rows remain. Full snapshot explicitly deactivates missing employees."
@@ -291,13 +303,16 @@ def workbook_bytes(state=None):
             "App-owned planning records are preserved. Resolve conflicts in the planning editor."
         ],
         [
-            "EmploymentStatus: active / leave / inactive. UnitType: company / group / department / subdepartment."
+            "EmploymentStatus: active / leave / inactive. UnitType: company / function / group / department / team / subteam / subdepartment."
         ],
         [
             "Objective Status: on-track / at-risk / off-track / complete / not-started. Direction: increase / decrease."
         ],
         [
             "ApprovedEnvelope covers a unit and all descendants. DirectAllocation reserves budget for directly assigned people."
+        ],
+        [
+            "Optional Tier: 0 company, 1 function, 2 group, 3 department, 4 team, 5+ subteam. DepartmentCode is text; duplicates are allowed."
         ],
         ["No objective score is calculated by averaging unrelated key results."],
         [
@@ -313,7 +328,7 @@ def workbook_bytes(state=None):
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{ws.cell(1,len(columns)).column_letter}1"
         if state:
-            for record in state[sheet].values():
+            for record in state.get(sheet, {}).values():
                 ws.append([record.get(c, "") for c in columns])
         for cell in ws[1]:
             cell.font = Font(color="FFFFFF", bold=True)
@@ -322,7 +337,7 @@ def workbook_bytes(state=None):
             ws.column_dimensions[ws.cell(1, idx).column_letter].width = max(
                 20, len(col) + 3
             )
-            if col.endswith("ID"):
+            if col.endswith("ID") or col == "DepartmentCode":
                 for cells in ws.iter_rows(min_row=2, min_col=idx, max_col=idx):
                     cells[0].number_format = "@"
     out = BytesIO()

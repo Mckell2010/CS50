@@ -2979,3 +2979,249 @@ dt {
     font-size: 10px;
   }
 }
+
+/* Company composition: two named segments; labels carry meaning without color. */
+.company-allocation {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.allocation-label {
+  font-size: 12px;
+  color: #33463b;
+  line-height: 1.4;
+}
+.allocation-bar {
+  height: 6px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e5e9e2;
+}
+.allocation-divergent {
+  background: #274f40;
+}
+.allocation-czinger {
+  background: #85622d;
+}
+.company-allocation.compact {
+  height: 32px;
+  padding: 0 14px 8px;
+  gap: 4px;
+}
+.company-allocation.compact .allocation-label {
+  font-size: 9px;
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.company-allocation.compact .allocation-bar {
+  height: 3px;
+}
+.allocation-edit {
+  margin-top: 12px;
+}
+
+.model-page {
+  display: grid;
+  gap: 24px;
+}
+.model-panel {
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 8px;
+  min-width: 0;
+}
+.model-panel h2 {
+  margin-bottom: 12px;
+  font-size: 24px;
+}
+.model-panel > .fine-print {
+  margin-bottom: 20px;
+}
+.model-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.model-table-wrap {
+  max-width: 100%;
+  overflow: auto;
+}
+.model-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 650px;
+}
+.model-table-wrap th,
+.model-table-wrap td {
+  padding: 12px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.model-table-wrap small {
+  display: block;
+  max-width: 240px;
+  margin-top: 4px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.model-table-wrap td button {
+  display: block;
+  margin-bottom: 6px;
+}
+.model-panel .notice {
+  margin: 18px 0;
+}
+.model-panel .editor-grid {
+  margin: 18px 0;
+}
+.pool-selector {
+  margin: 20px 0;
+}
+.pool-selector select {
+  min-height: 150px;
+}
+.model-nav {
+  justify-content: flex-start;
+  padding: 12px;
+  margin-top: 12px;
+  border-radius: 6px;
+}
+.model-nav.active {
+  background: #dfe9d9;
+}
+@media (max-width: 700px) {
+  .model-panel {
+    padding: 14px;
+  }
+  .model-toolbar label {
+    width: 100%;
+  }
+}
+
+/* Technical monochrome demo theme. Exact website styling remains to be reviewed. */
+:root {
+  --green: #151719;
+  --serif: Arial, Helvetica, sans-serif;
+  --muted: #70757b;
+  --line: #e0e2e5;
+  color: #202226;
+  background: #f3f4f5;
+}
+.sidebar {
+  background: #111315;
+  color: #e9ebed;
+  border-color: #24272b;
+}
+.brand-icon {
+  background: #f1f3f5;
+  color: #111315;
+  border-radius: 2px;
+}
+.brand {
+  color: #fff;
+  letter-spacing: 2.8px;
+}
+.brand small,
+.nav-label {
+  color: #969da4;
+}
+.workspace-switch,
+.workspace-avatar,
+.sidebar-note,
+.sidebar-bottom .avatar {
+  background: #202428;
+  color: #e9ebed;
+  border-color: #363c42;
+}
+.sidebar nav button {
+  color: #b8bfc6;
+}
+.sidebar nav button.active,
+.model-nav.active {
+  color: #fff;
+  background: #30363d;
+}
+.sidebar-note,
+.sidebar-note p,
+.sidebar-note strong {
+  color: #b8bfc6;
+}
+.sidebar-bottom {
+  border-color: #30363d;
+}
+.sidebar-user,
+.sidebar-user strong {
+  color: #f4f4f4;
+}
+.page-heading h1 {
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 650;
+  letter-spacing: -1px;
+}
+.primary {
+  border-radius: 3px;
+}
+.stats-grid .stat-card,
+.org-node,
+.chart-shell {
+  border-radius: 4px;
+}
+.org-node.selected {
+  border-color: #333b43;
+  box-shadow: 0 0 0 3px #242d3815;
+}
+.node-text strong,
+.profile h2,
+.allocation-label {
+  color: #20252a;
+}
+.node-text > span,
+.node-text small {
+  color: #68727c;
+}
+.allocation-divergent {
+  background: #20252a;
+}
+.allocation-czinger {
+  background: #a87836;
+}
+
+.model-panel .editor-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.model-panel label,
+.model-panel select,
+.model-panel input {
+  min-width: 0;
+  max-width: 100%;
+}
+.model-panel .editor-grid label,
+.model-panel .editor-grid select,
+.model-panel .editor-grid input {
+  color: #343a40;
+}
+@media (max-width: 700px) {
+  .model-panel .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.model-page td,
+.model-page th {
+  color: #49515a;
+}
+.model-page th,
+.model-panel .notice {
+  background: #f3f5f6;
+}
+.model-page .fine-print,
+.model-panel .notice {
+  color: #626c76;
+}

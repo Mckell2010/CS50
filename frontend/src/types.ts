@@ -5,10 +5,29 @@ export type Metric = {
   payroll: number | null;
   restricted?: boolean;
   missingPay?: number;
+  missingFTE?: number;
   otherCurrency?: number;
   complete?: boolean;
 };
+export type CompanyAllocation = {
+  mode: "explicit" | "calculated";
+  status:
+    | "complete"
+    | "unassigned"
+    | "incomplete"
+    | "restricted"
+    | "no-contributors"
+    | "zero-fte"
+    | "missing-fte";
+  canEdit: boolean;
+  contributorCount?: number;
+  contributorFTE?: number;
+  unassignedCount?: number;
+  divergentPercent?: number | null;
+  czingerPercent?: number | null;
+};
 export type Person = RecordData & {
+  companyAllocation: CompanyAllocation;
   EmployeeID: string;
   Name: string;
   JobTitle: string;
@@ -46,6 +65,7 @@ export type Session = {
   canViewCompensation: boolean;
 };
 export type Organization = {
+  demoNotes?: string[];
   employees: Person[];
   units: Unit[];
   objectives: RecordData[];

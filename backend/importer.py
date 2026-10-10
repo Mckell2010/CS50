@@ -16,6 +16,14 @@ def parse_workbook(content, mapping=None):
         wb = load_workbook(BytesIO(content), read_only=True, data_only=False)
     except (zipfile.BadZipFile, KeyError, ValueError) as e:
         raise ValueError(f"Invalid .xlsx workbook: {e}")
+    if "Employees" not in wb.sheetnames:
+        from backend.chart_import import chart_export, parse_chart
+
+        detected = chart_export(wb)
+        if detected:
+            result = parse_chart(*detected)
+            wb.close()
+            return result
     mapping = mapping or {}
     state = empty_state()
     errors = []

@@ -1,6 +1,6 @@
 # Validation record
 
-Validated locally on October 10, 2026. The corporate tenant and workbook are not configured, so no real-company sign-in or Graph access is claimed.
+Validated locally on October 10, 2026. Corporate sign-in and Graph access are not configured; no live tenant validation is claimed. Workbook demo validation is recorded below.
 
 ## Automated application checks
 
@@ -68,3 +68,24 @@ The standalone PostgreSQL SQL migration also passed against a separate empty dat
 The Docker image built successfully and ran as its non-root application user. Its health endpoint, full 30-person API response and served frontend passed. The default production image refused startup without Entra configuration, as intended. This cloud network required its supplied CA bundle as a temporary BuildKit secret; TLS verification remained enabled and the CA was not baked into the image.
 
 The online SQLite backup script created a new backup, and reopening it produced records and data version identical to the active database. Re-running the documented setup script succeeded without resetting existing data. Managed-cloud deployment and actual corporate credentials remain unconfigured.
+
+
+## Company allocation and tier update (October 10, 2026)
+
+- Full backend suite: **74 passed**. The 22 new allocation tests cover FTE weighting across unequal nested branches, unique contributor counts, ignored manager FTE, missing assignments, zero FTE, active dates, 2,000 reporting levels, scoped access, five allowed presets, rejected manager edits, atomic/stale writes, import ownership, promotion, and v1 SQLite upgrade without changing the existing records or data version.
+- Production frontend build passed. The existing Vite chunk-size advisory remains.
+- All 15 browser check groups passed. A saved 75/25 contributor assignment survived reload; managers transitioned from incomplete to calculated 75/25 after all contributors were assigned, offered no manual editor, and left headcount/FTE/payroll totals unchanged. Existing import, planning, roles, chart navigation, and narrow-screen checks also passed without runtime errors.
+- PostgreSQL 17: migrations 001 and 002 applied in order to an isolated database; v2 assignment persistence and the 75/25 CEO rollup passed. The temporary test container was removed.
+- Current 1,000-person API regression: 0.348 seconds and 587,929 response bytes with allocation summaries. Earlier browser performance measurements above describe the previous version.
+- Structure discovery: nine Tier 1 functions recorded; the three DII departments were removed at the user's request, leaving 33 Divergent and 16 Czinger departments. Department-to-function/group assignments and leadership reporting details are still being collected. The actual structure has not replaced the synthetic demo roster.
+- The supplied Divergent website URL returned HTTP 403 in this environment. The current monochrome styling is a draft and has not been compared against the live site.
+
+## Editable workbook demo (October 10, 2026)
+
+- **84 backend tests passed** and TypeScript/Vite production build passed. The existing bundle-size advisory remains (approximately 539 kB main JavaScript before gzip).
+- Added chart-export parsing, container removal, vacancy/draft handling, preserved stable IDs, missing FTE/pay, employee edit authorization, cycle validation, atomic bulk contributor assignments, persisted model settings, contractor participation, ended-person editing, executive cost separation, and cent reconciliation across company/function/department views.
+- All **16 browser acceptance groups passed**, including FTE edits, persisted model settings, draft creation without increasing headcount, and the department overhead view.
+- The private supplied chart loaded successfully into a separate database. Browser checks covered reporting-tree focus, searching an ended contractor, editing unknown FTE, overhead controls and a 390 px layout without overflow or runtime errors. Private screenshots and source data remain ignored.
+- The generic release adapter was independently run without private discovery files. It imports the selected workbook and seeds structural labels; executive pool membership and leader corrections are configured by the user.
+- The launcher installed dependencies, built the frontend, started the private database and passed its HTTP readiness check on Linux. The Windows wrapper is included but has not been executed on Windows.
+- Corporate authentication, a public deployment and exact visual matching to the blocked website remain outside these local checks.

@@ -28,6 +28,7 @@ import {
 import type { Organization, Person, Unit, RecordData } from "./types";
 import { initials, money } from "./types";
 import "@xyflow/react/dist/style.css";
+import CompanyAllocationView from "./CompanyAllocation";
 
 type CardData = {
   item: RecordData;
@@ -47,7 +48,12 @@ const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
   return (
     <div
       className={`org-node ${d.selected ? "selected" : ""}`}
-      style={{ "--node-accent": d.color } as React.CSSProperties}
+      style={
+        {
+          "--node-accent": d.color,
+          height: d.unit ? 132 : 164,
+        } as React.CSSProperties
+      }
     >
       <Handle type="target" position={Position.Top} />
       <button
@@ -63,11 +69,30 @@ const OrgCard = memo(({ data }: NodeProps<Node<CardData>>) => {
           <span>{d.subtitle}</span>
           <small>
             <i />
-            {d.unit ? d.item.UnitType : d.item.unitName}
+            {d.unit
+              ? `${d.item.Tier !== undefined && d.item.Tier !== "" ? `Tier ${d.item.Tier} · ` : ""}${d.item.UnitType}`
+              : d.item.unitName}
           </small>
         </div>
         <ArrowUpRight className="node-open" size={15} />
       </button>
+      {!d.unit && ["vacant", "draft"].includes(d.item.EmploymentStatus) ? (
+        <div className="company-allocation compact">
+          <span className="allocation-label">
+            {d.item.EmploymentStatus === "vacant"
+              ? "Open position · excluded from headcount"
+              : "Draft · employment details needed"}
+          </span>
+        </div>
+      ) : (
+        !d.unit &&
+        d.item.companyAllocation && (
+          <CompanyAllocationView
+            allocation={d.item.companyAllocation}
+            compact
+          />
+        )
+      )}
       <div className="node-footer">
         <span>
           <Users size={12} />
@@ -216,7 +241,7 @@ function ChartInner({
     visible.forEach((id) => {
       const r = byId.get(id);
       if (!r) return;
-      g.setNode(id, { width: 260, height: 132 });
+      g.setNode(id, { width: 260, height: unit ? 132 : 164 });
       const metric = unit ? r.metrics.total : r.metrics;
       const objectiveCount = data.objectives.filter(
         (o) => o.OrgUnitID === r.OrgUnitID,
@@ -273,7 +298,7 @@ function ChartInner({
     dagre.layout(g);
     ns.forEach((n) => {
       const p = g.node(n.id);
-      n.position = { x: p.x - 130, y: p.y - 66 };
+      n.position = { x: p.x - 130, y: p.y - (unit ? 66 : 82) };
     });
     return { nodes: ns, edges: es };
   }, [
@@ -314,7 +339,7 @@ function ChartInner({
     const t = setTimeout(() => {
       const n = getNode(searchTarget);
       if (n)
-        setCenter(n.position.x + 130, n.position.y + 66, {
+        setCenter(n.position.x + 130, n.position.y + (unit ? 66 : 82), {
           zoom: 1,
           duration: 500,
         });
@@ -326,7 +351,7 @@ function ChartInner({
     const t = setTimeout(() => {
       const n = getNode(selected);
       if (n)
-        setCenter(n.position.x + 130, n.position.y + 66, {
+        setCenter(n.position.x + 130, n.position.y + (unit ? 66 : 82), {
           zoom: 1,
           duration: 300,
         });

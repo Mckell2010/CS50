@@ -20,6 +20,7 @@ from backend.auth import (
 )
 from backend.db import Database, StaleWrite, previews, imports, audit
 from backend.domain import *
+from backend.allocations import allocation_summaries
 from backend.importer import parse_workbook, MAX_UPLOAD
 from backend.sample import sample_state, workbook_bytes
 
@@ -82,7 +83,7 @@ async def stale(request, exc):
 @app.get("/api/health")
 def health():
     _, version = DB.read()
-    return {"status": "ok", "schemaVersion": 1, "dataVersion": version}
+    return {"status": "ok", "schemaVersion": 2, "dataVersion": version}
 
 
 @app.get("/api/auth/config")
@@ -144,8 +145,10 @@ def graph_data(state, p, as_of, currency):
     people = {
         k: e
         for k, e in state["Employees"].items()
-        if e["OrgUnitID"] in units and active(e, as_of)
+        if e["OrgUnitID"] in units
+        and (active(e, as_of) or e.get("EmploymentStatus") in {"vacant", "draft"})
     }
+    active_count = sum(active(e, as_of) for e in people.values())
     org = {k: u for k, u in state["OrganizationalUnits"].items() if k in units}
     objectives = {
         k: o for k, o in state["Objectives"].items() if o["OrgUnitID"] in units
@@ -175,7 +178,7 @@ def graph_data(state, p, as_of, currency):
         return safe_metric(payroll(state, ids, as_of, currency), allow)
 
     full = scope_metric(
-        set(people), p.finance or (p.role == "owner" and len(people) >= 5)
+        set(people), p.finance or (p.role == "owner" and active_count >= 5)
     )
     full["scope"] = (
         "Company"
@@ -186,10 +189,18 @@ def graph_data(state, p, as_of, currency):
         "Owners see one fixed scope total only, with at least 5 active people. Subtotals and individual pay are restricted."
     )
     result["summary"] = full
+    allocations = allocation_summaries(
+        state,
+        as_of,
+        set(people),
+        DB.get_setting("model", {}).get("includeContractors", True),
+    )
     emp_children = children(people, "ManagerID")
     for k, e in people.items():
         row = public(e)
         row["ManagerID"] = e.get("ManagerID") if e.get("ManagerID") in people else ""
+        row["companyAllocation"] = allocations[k]
+        row["companyAllocation"]["canEdit"] &= p.editor
         row["directReports"] = len(emp_children.get(k, []))
         ids = descendants(people, "ManagerID", k)
         row["metrics"] = scope_metric(ids, p.finance)
@@ -203,8 +214,15 @@ def graph_data(state, p, as_of, currency):
         row["OwnerEmployeeID"] = (
             u.get("OwnerEmployeeID") if u.get("OwnerEmployeeID") in people else ""
         )
-        metric = budget_metrics(state, k, as_of[:4], currency, as_of)
-        allow = p.finance or (p.role == "owner" and k == p.unit and len(people) >= 5)
+        metric = budget_metrics(
+            state,
+            k,
+            as_of[:4],
+            currency,
+            as_of,
+            DB.get_setting("model", {}).get("executiveIDs", []),
+        )
+        allow = p.finance or (p.role == "owner" and k == p.unit and active_count >= 5)
         metric["total"] = safe_metric(metric["total"], allow)
         metric["direct"] = safe_metric(metric["direct"], p.finance)
         if not allow:
@@ -274,6 +292,7 @@ def organization(
         currency=currency,
         synthetic=DB.get_setting("synthetic", False),
         rootEmployee=DB.get_setting("rootEmployee", "001"),
+        demoNotes=DB.get_setting("demoNotes", []),
     )
     return result
 
@@ -303,7 +322,11 @@ def download(kind: str, p: Principal = Depends(principal)):
     else:
         state = sample_state() if kind == "sample" else None
     return Response(
-        workbook_bytes(state),
+        workbook_bytes(
+            state,
+            synthetic=kind == "sample"
+            or (kind == "export" and DB.get_setting("synthetic", False)),
+        ),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="divergent-{kind}.xlsx"'
@@ -325,6 +348,23 @@ def create_preview(content, filename, mapping, mode, p, synthetic=False, restore
                 "message": "An empty snapshot cannot deactivate the whole organization",
             }
         )
+    managers = {e.get("ManagerID") for e in merged["Employees"].values()}
+    for key, record in incoming.get("CompanyAllocations", {}).items():
+        old = current.get("CompanyAllocations", {}).get(key)
+        effective = merged["CompanyAllocations"].get(key, {})
+        if key in managers and (
+            not old
+            or clean_value(old.get("DivergentPercent"))
+            != clean_value(effective.get("DivergentPercent"))
+        ):
+            parse_errors.append(
+                {
+                    "sheet": "CompanyAllocations",
+                    "row": record.get("_row"),
+                    "field": "EmployeeID",
+                    "message": "Set allocations for individual contributors only; manager allocations are calculated",
+                }
+            )
     errors, domain_warnings = validate(merged)
     token = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -519,7 +559,23 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
     if record_key(sheet, record) != ident:
         raise HTTPException(400, "Record ID must match URL")
     existing = state[sheet].get(ident)
-    if sheet == "OrganizationalUnits":
+    if sheet == "Employees":
+        require_admin(p)
+    elif sheet == "CompanyAllocations":
+        employee = state["Employees"].get(ident)
+        if not employee or employee["OrgUnitID"] not in units:
+            raise HTTPException(403, "Employee outside your scope")
+        if employee.get("EmploymentStatus") in {"vacant", "draft"}:
+            raise HTTPException(
+                422,
+                "Set allocations for active contributors, not vacant or draft positions",
+            )
+        if any(e.get("ManagerID") == ident for e in state["Employees"].values()):
+            raise HTTPException(
+                422,
+                "Managers are calculated from individual contributors and cannot have manual allocations",
+            )
+    elif sheet == "OrganizationalUnits":
         parent = record.get("ParentOrgUnitID")
         if p.role == "owner" and (
             parent not in units or (existing and ident not in units) or ident == p.unit
@@ -533,8 +589,14 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
             raise HTTPException(
                 403, "Only administrators or finance may move existing units"
             )
-        if p.role == "owner" and record["UnitType"] != "subdepartment":
-            raise HTTPException(403, "Owners may create subdepartments")
+        if p.role == "owner" and record["UnitType"] not in {
+            "subdepartment",
+            "team",
+            "subteam",
+        }:
+            raise HTTPException(
+                403, "Owners may create subdepartments, teams, and subteams"
+            )
     elif sheet == "KeyResults":
         obj = state["Objectives"].get(record.get("ObjectiveID"))
         old_obj = (
@@ -684,6 +746,106 @@ def settings_update(body: SettingsBody, p: Principal = Depends(principal)):
         "configure-root",
         {"rootEmployee": body.rootEmployee},
         setting=("rootEmployee", body.rootEmployee),
+    )
+    return {"version": body.version + 1}
+
+
+class ModelEdit(BaseModel):
+    version: int
+    config: dict
+
+
+@app.get("/api/model")
+def model_get(p: Principal = Depends(principal)):
+    if not p.finance:
+        raise HTTPException(
+            403, "Model settings require administrator or finance access"
+        )
+    from backend.overhead import default_model, overhead_preview
+
+    state, version = DB.read()
+    config = {**default_model(state), **DB.get_setting("model", {})}
+    all_allocations = allocation_summaries(
+        state,
+        date.today().isoformat(),
+        set(state["Employees"]),
+        config["includeContractors"],
+    )
+    roster = [
+        dict(public(e), companyAllocation=all_allocations[k])
+        for k, e in state["Employees"].items()
+    ]
+    return {
+        "version": version,
+        "config": config,
+        "people": roster,
+        "preview": overhead_preview(state, config, date.today().isoformat(), "USD"),
+    }
+
+
+@app.put("/api/model")
+def model_put(body: ModelEdit, p: Principal = Depends(principal)):
+    if not p.finance:
+        raise HTTPException(
+            403, "Model settings require administrator or finance access"
+        )
+    from backend.overhead import default_model, validate_model
+
+    state, version = DB.read()
+    config = {
+        **default_model(state),
+        **{k: v for k, v in body.config.items() if k in default_model(state)},
+    }
+    try:
+        validate_model(state, config)
+    except (ValueError, TypeError, InvalidOperation) as exc:
+        raise HTTPException(422, str(exc))
+    DB.save(
+        state,
+        body.version,
+        p.id,
+        "configure-model",
+        {"config": config},
+        setting=("model", config),
+    )
+    return {"version": body.version + 1}
+
+
+class BulkAllocations(BaseModel):
+    version: int
+    employeeIDs: list[str]
+    divergentPercent: int
+
+
+@app.put("/api/model/allocations")
+def bulk_allocations(body: BulkAllocations, p: Principal = Depends(principal)):
+    require_admin(p)
+    state, version = DB.read()
+    if body.divergentPercent not in {0, 25, 50, 75, 100} or not body.employeeIDs:
+        raise HTTPException(422, "Select contributors and an allowed percentage")
+    managers = {e.get("ManagerID") for e in state["Employees"].values()}
+    ids = set(body.employeeIDs)
+    if any(
+        key not in state["Employees"]
+        or key in managers
+        or state["Employees"][key]["EmploymentStatus"] in {"vacant", "draft"}
+        for key in ids
+    ):
+        raise HTTPException(422, "Only filled individual contributors can be assigned")
+    for key in ids:
+        state["CompanyAllocations"][key] = dict(
+            EmployeeID=key,
+            DivergentPercent=str(body.divergentPercent),
+            _source="app",
+            _editor=p.id,
+            _modified=datetime.now(timezone.utc).isoformat(),
+        )
+    DB.save(
+        state,
+        body.version,
+        p.id,
+        "bulk-company-allocations",
+        {"employeeIDs": sorted(ids), "divergentPercent": body.divergentPercent},
     )
     return {"version": body.version + 1}
 

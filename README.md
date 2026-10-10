@@ -4,7 +4,21 @@ A runnable organization planning application with progressive people and unit ch
 
 The bundled 30-person organization is **synthetic**. Lukas Czinger is the example CEO specified in the brief; every other name, relationship, compensation amount, and objective is invented. Demo authentication is visibly labeled. No corporate connection is simulated.
 
-## Run
+## Demo with your workbook
+
+On Windows, extract the ZIP into a new folder and double-click **demo.cmd**. Python 3.12+ and Node.js 24 must be on PATH. The launcher creates the virtual environment, installs dependencies, builds the app, and asks you to select your org-chart `.xlsx` on first launch. It opens your browser automatically. Keep the terminal open while using the app; Ctrl+C stops it. Start `demo.cmd` again to resume saved edits.
+
+On macOS/Linux, run `./demo.sh --workbook "/path/to/chart.xlsx"`. You can also run `python scripts/run_demo.py --workbook "C:\path\chart.xlsx"` on Windows if the file picker is unavailable.
+
+The private demo uses `data/private-demo.db`; the synthetic demo below uses `data/explorer.db`. The launcher preserves existing databases. Your workbook and database stay on your machine and are not included in the source ZIP. Back up the database before replacing an old app folder.
+
+In **Model settings**, edit reporting lines, titles, departments, employment dates, vacancies and FTE. Explicitly assign contributor splits individually or select filtered contributors for bulk assignment. Managers calculate their team's split from downstream contributor FTE. Use **Organizational units** to edit tiers and parent units.
+
+Choose executive pool members and a separate informational company split, then save the model. Executive costs roll up once at company level, outside department costs. Informational shares use contributor FTE across functions within each company; unassigned functions remain visible. A department breakdown shows the same pool at department level; do not add the two views together. Shares never increase payroll or consolidated totals. Missing allocations, FTE and compensation remain incomplete. The workbook adapter imports no compensation or inferred contributor splits. Full-time FTE defaults to a labeled provisional 1.0; other employment types need an explicit FTE.
+
+The shipped function/group hierarchy contains confirmed structural labels, but no private roster or leader mapping. People and reporting lines come from the selected workbook and can be corrected on the page. Select your executive pool after importing. Ended assignments remain available in Model settings but are excluded from today's chart and totals.
+
+## Run the synthetic sample
 
 Requires Python 3.12+ and Node 24. From the repository root:
 
@@ -23,6 +37,7 @@ The scripts read exported environment variables. `.env.example` documents config
 
 - **People:** starts with the CEO only. Selecting a card reveals one layer and its details; the small chevron explicitly collapses a branch. Search reveals ancestors. Expand Next Layer, Collapse All, Focus, Fit, zoom, and pan work independently of aggregate calculations. Expansion/selection/overlay state is retained in the browser where records remain available.
 - **Organizational units:** a separate hierarchy, with owned units and directly/inclusively assigned people. Unit budgets never use a reporting-subtree population.
+- **Company allocations:** select an individual contributor in the People chart, then **Set company allocation**. Choose Divergent/Czinger 100/0, 75/25, 50/50, 25/75, or 0/100. Managers automatically show the FTE-weighted composition of all downstream contributors. Missing assignments stay incomplete; manager FTE and payroll are unchanged. Existing workbooks and databases remain supported.
 - **Payroll & budgets:** effective-dated annualized payroll run rate, loaded costs, missing data, direct allocations, child envelopes, headroom, and over-allocation. This is not YTD spend or a hiring forecast.
 - **Objectives & KRs:** create/edit linked objectives, accountable owners, periods, explicit health, and increasing/decreasing key results. Progress is calculated per metric; unrelated metrics are never averaged into a company score.
 - **Data & imports:** download an empty template or synthetic workbook; upload `.xlsx`, map columns, inspect changes/errors/conflicts, and confirm. Incremental imports preserve omitted rows. Full snapshots require explicit confirmation for missing-employee deactivations. Import history supports a new preview of an old snapshot while retaining app-owned plans.
@@ -51,5 +66,6 @@ See [validation results](docs/validation.md) for observed checks and practical l
 - [Empty Excel template](examples/divergent-template.xlsx)
 - [Synthetic sample workbook](examples/divergent-synthetic-sample.xlsx)
 - [Initial PostgreSQL migration](migrations/001_initial.postgresql.sql)
+- [Company allocation database upgrade](migrations/002_company_allocations.postgresql.sql)
 
 The local app works without corporate credentials. Entra and Graph adapters require actual tenant configuration and permissions before live validation. A Dockerfile is supplied; no cloud resource, domain, public deployment, or production database is provisioned by this repository.

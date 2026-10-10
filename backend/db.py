@@ -30,6 +30,7 @@ TABLE_NAMES = {
     "OrganizationalUnits": "org_units",
     "Employees": "employees",
     "Compensation": "compensation",
+    "CompanyAllocations": "company_allocations",
     "Budgets": "budgets",
     "Objectives": "objectives",
     "KeyResults": "key_results",
@@ -41,6 +42,7 @@ LINKS = {
     },
     "Employees": {"ManagerID": "Employees", "OrgUnitID": "OrganizationalUnits"},
     "Compensation": {"EmployeeID": "Employees"},
+    "CompanyAllocations": {"EmployeeID": "Employees"},
     "Budgets": {"OrgUnitID": "OrganizationalUnits"},
     "Objectives": {
         "OrgUnitID": "OrganizationalUnits",
@@ -129,7 +131,14 @@ class Database:
         meta.create_all(self.engine)
         with self.engine.begin() as c:
             if c.execute(select(version)).first() is None:
-                c.execute(insert(version).values(id=1, version=0, schema_version=1))
+                c.execute(insert(version).values(id=1, version=0, schema_version=2))
+
+            else:
+                c.execute(
+                    update(version)
+                    .where(version.c.schema_version == 1)
+                    .values(schema_version=2)
+                )
 
     def read(self):
         with self.engine.connect() as c:
@@ -173,7 +182,7 @@ class Database:
                         payload=r,
                         **{f: r.get(f) or None for f in LINKS.get(sheet, {})}
                     )
-                    for k, r in state[sheet].items()
+                    for k, r in state.get(sheet, {}).items()
                 ]
                 if rows:
                     c.execute(insert(t), rows)

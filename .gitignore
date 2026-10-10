@@ -9,3 +9,8 @@ data/*
 frontend/dist/
 artifacts/*
 !artifacts/.gitkeep
+
+# Private organization discovery; never ship the real roster in source releases.
+docs/*-mapping.csv
+docs/organization-discovery.md
+docs/leadership-preview.md

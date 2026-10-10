@@ -2,12 +2,30 @@ import { useState } from "react";
 import { X, Check, AlertTriangle } from "lucide-react";
 import { api, type Organization, type RecordData } from "./types";
 export const FIELDS: Record<string, string[]> = {
+  Employees: [
+    "EmployeeID",
+    "Name",
+    "JobTitle",
+    "ManagerID",
+    "OrgUnitID",
+    "EmploymentStatus",
+    "FTE",
+    "StartDate",
+    "EndDate",
+    "EmploymentType",
+    "Location",
+    "SourceCompany",
+    "FTEBasis",
+  ],
+  CompanyAllocations: ["EmployeeID", "DivergentPercent"],
   OrganizationalUnits: [
     "OrgUnitID",
     "OrgUnitName",
     "ParentOrgUnitID",
     "UnitType",
     "OwnerEmployeeID",
+    "Tier",
+    "DepartmentCode",
   ],
   Budgets: [
     "BudgetID",
@@ -41,6 +59,8 @@ export const FIELDS: Record<string, string[]> = {
   ],
 };
 const TITLES: Record<string, string> = {
+  Employees: "Person / position",
+  CompanyAllocations: "Contributor company allocation",
   OrganizationalUnits: "Organizational unit",
   Budgets: "Budget allocation",
   Objectives: "Objective",
@@ -118,6 +138,16 @@ export default function Editor({
               {error}
             </div>
           )}
+          {sheet === "CompanyAllocations" && (
+            <p className="notice">
+              {
+                data.employees.find((e) => e.EmployeeID === form.EmployeeID)
+                  ?.Name
+              }{" "}
+              · Individual contributor. This assignment updates the calculated
+              team composition of every manager above them.
+            </p>
+          )}
           <div className="editor-grid">
             {FIELDS[sheet].map((field, i) => {
               let options: { value: string; label: string }[] | undefined;
@@ -129,7 +159,7 @@ export default function Editor({
                   value: u.OrgUnitID,
                   label: u.OrgUnitName,
                 }));
-              if (field === "OwnerEmployeeID")
+              if (field === "OwnerEmployeeID" || field === "ManagerID")
                 options = data.employees.map((e) => ({
                   value: e.EmployeeID,
                   label: e.Name,
@@ -144,13 +174,34 @@ export default function Editor({
                     value: o.ObjectiveID,
                     label: o.ObjectiveText,
                   }));
+              if (field === "DivergentPercent")
+                options = [100, 75, 50, 25, 0].map((value) => ({
+                  value: String(value),
+                  label: `Divergent ${value}% / Czinger ${100 - value}%`,
+                }));
               if (field === "UnitType")
                 options = [
-                  "subdepartment",
-                  "department",
-                  "group",
                   "company",
+                  "function",
+                  "group",
+                  "department",
+                  "team",
+                  "subteam",
+                  "subdepartment",
                 ].map((value) => ({ value, label: value }));
+              if (field === "EmploymentStatus")
+                options = [
+                  "active",
+                  "leave",
+                  "inactive",
+                  "vacant",
+                  "draft",
+                ].map((value) => ({ value, label: value }));
+              if (field === "SourceCompany")
+                options = ["divergent", "czinger"].map((value) => ({
+                  value,
+                  label: value,
+                }));
               if (field === "Status")
                 options = [
                   "on-track",
@@ -183,7 +234,14 @@ export default function Editor({
                   e: React.ChangeEvent<
                     HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
                   >,
-                ) => setForm((f) => ({ ...f, [field]: e.target.value })),
+                ) =>
+                  setForm((f) => ({
+                    ...f,
+                    [field]: e.target.value,
+                    ...(field === "FTE"
+                      ? { FTEBasis: "Manually entered" }
+                      : {}),
+                  })),
               };
               return (
                 <label
@@ -192,7 +250,7 @@ export default function Editor({
                 >
                   {label(field)}
                   {options ? (
-                    <select {...props}>
+                    <select {...props} required={field === "DivergentPercent"}>
                       <option value="">Select…</option>
                       {options.map((o) => (
                         <option key={o.value} value={o.value}>
@@ -207,11 +265,17 @@ export default function Editor({
                       {...props}
                       readOnly={i === 0}
                       type={
-                        ["PeriodStart", "PeriodEnd", "LastUpdated"].includes(
-                          field,
-                        )
+                        [
+                          "PeriodStart",
+                          "PeriodEnd",
+                          "LastUpdated",
+                          "StartDate",
+                          "EndDate",
+                        ].includes(field)
                           ? "date"
                           : [
+                                "FTE",
+                                "Tier",
                                 "BudgetYear",
                                 "ApprovedEnvelope",
                                 "DirectAllocation",
@@ -222,7 +286,8 @@ export default function Editor({
                             ? "number"
                             : "text"
                       }
-                      step="any"
+                      step={field === "Tier" ? "1" : "any"}
+                      min={field === "Tier" ? 0 : undefined}
                       required={
                         i === 0 || ["OrgUnitName", "MetricName"].includes(field)
                       }
@@ -232,6 +297,14 @@ export default function Editor({
               );
             })}
           </div>
+          {sheet === "OrganizationalUnits" && (
+            <p className="fine-print">
+              Tier 0: company · 1: function · 2: group · 3: department · 4: team
+              · 5+: subteam. Leave Tier blank for existing units awaiting
+              classification. Department codes are text and may repeat across
+              companies.
+            </p>
+          )}
           <p className="fine-print">
             Saved planning records become app-owned and survive future Excel
             imports. Every edit is recorded in the audit history.

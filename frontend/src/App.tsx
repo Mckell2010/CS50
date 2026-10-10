@@ -33,6 +33,8 @@ import {
 import OrgChart, { colorFor } from "./OrgChart";
 import ImportPanel, { downloadWorkbook } from "./ImportPanel";
 import Editor from "./Editor";
+import ModelPage from "./ModelPage";
+import CompanyAllocationView from "./CompanyAllocation";
 import {
   api,
   money,
@@ -436,11 +438,13 @@ export default function App() {
       : roots.reduce((sum, u) => sum + (u.metrics.envelope || 0), 0);
   const summary = data.summary;
   const title =
-    page === "organization"
-      ? "A clearer view of your organization."
-      : page === "budgets"
-        ? "Resources, with a sense of direction."
-        : "Big ambitions. Shared progress.";
+    page === "model"
+      ? "Tune your organization."
+      : page === "organization"
+        ? "A clearer view of your organization."
+        : page === "budgets"
+          ? "Resources, with a sense of direction."
+          : "Big ambitions. Shared progress.";
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -516,6 +520,15 @@ export default function App() {
             </button>
           )}
         </nav>
+        {session.canViewCompensation && (
+          <button
+            className={`model-nav ${page === "model" ? "active" : ""}`}
+            onClick={() => setPage("model")}
+          >
+            <SlidersHorizontal size={17} />
+            Model settings
+          </button>
+        )}
         <div className="sidebar-bottom">
           <div className="sidebar-note">
             <span className="live-dot" />
@@ -557,11 +570,13 @@ export default function App() {
             Workspace
             <ChevronRight size={12} />
             <strong>
-              {page === "organization"
-                ? "Organization"
-                : page === "budgets"
-                  ? "Payroll & budgets"
-                  : "Objectives & KRs"}
+              {page === "model"
+                ? "Model settings"
+                : page === "organization"
+                  ? "Organization"
+                  : page === "budgets"
+                    ? "Payroll & budgets"
+                    : "Objectives & KRs"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -601,11 +616,13 @@ export default function App() {
               </div>
               <h1>{title}</h1>
               <p>
-                {page === "organization"
-                  ? "Explore the people, teams, and connections moving us forward."
-                  : page === "budgets"
-                    ? "Align annual resources with the teams doing the work."
-                    : "Connect company priorities to meaningful, measurable outcomes."}
+                {page === "model"
+                  ? "Review people, reporting lines, company assignments, and informational overhead."
+                  : page === "organization"
+                    ? "Explore the people, teams, and connections moving us forward."
+                    : page === "budgets"
+                      ? "Align annual resources with the teams doing the work."
+                      : "Connect company priorities to meaningful, measurable outcomes."}
               </p>
             </div>
             {session.canImport && (
@@ -618,6 +635,18 @@ export default function App() {
               </button>
             )}
           </div>
+          {data.demoNotes?.length ? (
+            <details className="notice">
+              <summary>
+                Workbook assumptions and review notes ({data.demoNotes.length})
+              </summary>
+              <ul>
+                {data.demoNotes.map((note, i) => (
+                  <li key={i}>{note}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           {error && (
             <div className="notice error" role="alert">
               <AlertTriangle size={17} />
@@ -673,7 +702,10 @@ export default function App() {
               </span>
               <strong>
                 {summary.headcount}
-                <small>{summary.fte.toLocaleString()} FTE</small>
+                <small>
+                  {summary.fte.toLocaleString()} known FTE
+                  {summary.missingFTE ? ` · ${summary.missingFTE} unknown` : ""}
+                </small>
               </strong>
               <p>
                 <span className="stat-dot" />
@@ -709,6 +741,9 @@ export default function App() {
                     <LockKeyhole size={21} />
                     Restricted
                   </>
+                ) : summary.missingPay === summary.headcount &&
+                  summary.headcount > 0 ? (
+                  "Not supplied"
                 ) : (
                   money(summary.payroll, currency, true)
                 )}
@@ -739,6 +774,14 @@ export default function App() {
               <p>Health is owner-reported</p>
             </div>
           </section>
+          {page === "model" && (
+            <ModelPage
+              data={data}
+              session={session}
+              onEdit={(sheet, record) => setEditor({ sheet, record })}
+              onSaved={reload}
+            />
+          )}
           {page === "organization" && (
             <section className="organization-board">
               <div className="board-toolbar">
@@ -905,7 +948,7 @@ export default function App() {
                           <p>
                             {view === "people"
                               ? person!.JobTitle
-                              : unit!.UnitType}
+                              : `${unit!.Tier !== undefined && unit!.Tier !== "" ? `Tier ${unit!.Tier} · ` : ""}${unit!.UnitType}`}
                           </p>
                           <span className="profile-unit">
                             <i
@@ -942,6 +985,11 @@ export default function App() {
                                   (e) => e.EmployeeID === unit!.OwnerEmployeeID,
                                 )?.Name || "Unassigned / outside scope"}
                               </span>
+                              {unit!.DepartmentCode && (
+                                <span>
+                                  Department code: {unit!.DepartmentCode}
+                                </span>
+                              )}
                               <span>
                                 <CheckCircle2 size={14} />
                                 {unit!.source === "app"
@@ -993,6 +1041,42 @@ export default function App() {
                             </p>
                           )}
                         </div>
+                        {view === "people" && person!.companyAllocation && (
+                          <section
+                            className="detail-section"
+                            aria-label="Company allocation"
+                          >
+                            <h3>
+                              {person!.companyAllocation.mode === "calculated"
+                                ? "Calculated team allocation"
+                                : "Contributor company allocation"}
+                            </h3>
+                            <CompanyAllocationView
+                              allocation={person!.companyAllocation}
+                            />
+                            {person!.companyAllocation.canEdit && (
+                              <button
+                                className="secondary allocation-edit"
+                                onClick={() =>
+                                  setEditor({
+                                    sheet: "CompanyAllocations",
+                                    record: {
+                                      EmployeeID: person!.EmployeeID,
+                                      DivergentPercent:
+                                        person!.companyAllocation
+                                          .divergentPercent ?? "",
+                                    },
+                                  })
+                                }
+                              >
+                                {person!.companyAllocation.status ===
+                                "unassigned"
+                                  ? "Set company allocation"
+                                  : "Edit company allocation"}
+                              </button>
+                            )}
+                          </section>
+                        )}
                         <div className="detail-section">
                           <h3>
                             Annualized payroll run rate

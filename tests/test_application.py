@@ -698,3 +698,75 @@ def test_graph_stale_preview_is_regenerated(client, monkeypatch):
     assert edit(client, "Objectives", obj).status_code == 200
     second = client.post("/api/integration/refresh").json()["previewId"]
     assert first != second
+
+
+def test_explicit_tiers_and_duplicate_department_codes_roundtrip():
+    state = sample_state()
+    units = state["OrganizationalUnits"]
+    parent = ""
+    for tier, kind in enumerate(
+        ["company", "function", "group", "department", "team", "subteam", "subteam"]
+    ):
+        ident = f"tier-{tier}"
+        units[ident] = dict(
+            OrgUnitID=ident,
+            OrgUnitName=kind,
+            ParentOrgUnitID=parent,
+            UnitType=kind,
+            Tier=str(tier),
+            DepartmentCode="08",
+        )
+        parent = ident
+    assert not validate(state)[0]
+    db = Database("sqlite:///:memory:")
+    db.save(state, 0, "test", "tiers")
+    saved, _ = db.read()
+    assert saved["OrganizationalUnits"]["tier-6"]["Tier"] == "6"
+    assert saved["OrganizationalUnits"]["tier-3"]["DepartmentCode"] == "08"
+    from backend.importer import parse_workbook
+
+    parsed, errors, _, _ = parse_workbook(workbook_bytes(state))
+    assert not errors
+    assert parsed["OrganizationalUnits"]["tier-3"]["DepartmentCode"] == "08"
+
+
+@pytest.mark.parametrize("tier", ["-1", "1.5", "NaN", "Infinity", "four"])
+def test_invalid_explicit_tier_is_rejected(tier):
+    state = sample_state()
+    state["OrganizationalUnits"]["company"]["Tier"] = tier
+    assert any(e["field"] == "Tier" for e in validate(state)[0])
+
+
+def test_tier_type_and_parent_order_are_validated():
+    state = sample_state()
+    state["OrganizationalUnits"]["company"]["Tier"] = "0"
+    state["OrganizationalUnits"]["eng"]["Tier"] = "1"
+    assert any(e["field"] == "Tier" for e in validate(state)[0])
+    state["OrganizationalUnits"]["eng"]["Tier"] = "2"
+    state["OrganizationalUnits"]["platform"]["Tier"] = "3"
+    state["OrganizationalUnits"]["software"]["Tier"] = "3"
+    assert any("parent tier" in e["message"] for e in validate(state)[0])
+
+
+def test_owner_can_create_team_only_within_assigned_scope(client):
+    role(client, "owner")
+    data = client.get("/api/organization").json()
+    record = dict(
+        OrgUnitID="owner-team",
+        OrgUnitName="Team",
+        ParentOrgUnitID="platform",
+        UnitType="team",
+        Tier="4",
+    )
+    saved = client.put(
+        "/api/planning/OrganizationalUnits/owner-team",
+        json={"version": data["version"], "record": record},
+    )
+    assert saved.status_code == 200, saved.text
+    data = client.get("/api/organization").json()
+    record.update(OrgUnitID="outside-team", ParentOrgUnitID="ops")
+    denied = client.put(
+        "/api/planning/OrganizationalUnits/outside-team",
+        json={"version": data["version"], "record": record},
+    )
+    assert denied.status_code == 403

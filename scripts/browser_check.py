@@ -111,6 +111,70 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             mark(
                 "Collapse preserves totals; search reveals a hidden ancestor path and selects its person"
             )
+            allocation_panel = page.get_by_role(
+                "region", name="Company allocation", exact=True
+            )
+            expect(allocation_panel).to_contain_text("Company allocation not set")
+            page.get_by_role(
+                "button", name="Set company allocation", exact=True
+            ).click()
+            page.get_by_label("Divergent Percent", exact=True).select_option("75")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(allocation_panel).to_contain_text("Divergent 75% · Czinger 25%")
+            page.reload()
+            expect(
+                page.get_by_role("region", name="Company allocation", exact=True)
+            ).to_contain_text("Divergent 75% · Czinger 25%")
+            page.screenshot(
+                path=str(ARTIFACTS / "contributor-allocation.png"), full_page=True
+            )
+            page.get_by_role("textbox", name="Search organization").fill(
+                "Lukas Czinger"
+            )
+            page.get_by_role("option").filter(has_text="Lukas Czinger").click()
+            allocation_panel = page.get_by_role(
+                "region", name="Company allocation", exact=True
+            )
+            expect(allocation_panel).to_contain_text("Calculated team allocation")
+            expect(allocation_panel).to_contain_text("contributor allocations missing")
+            assert allocation_panel.get_by_role("button").count() == 0
+            state_response = page.request.get(BASE + "/api/organization").json()
+            allocation_version = state_response["version"]
+            for employee in state_response["employees"]:
+                if employee["companyAllocation"]["mode"] == "explicit":
+                    response = page.request.put(
+                        BASE
+                        + "/api/planning/CompanyAllocations/"
+                        + employee["EmployeeID"],
+                        data={
+                            "version": allocation_version,
+                            "record": {
+                                "EmployeeID": employee["EmployeeID"],
+                                "DivergentPercent": "75",
+                            },
+                        },
+                    )
+                    assert response.status == 200, response.text()
+                    allocation_version = response.json()["version"]
+            page.reload()
+            allocation_panel = page.get_by_role(
+                "region", name="Company allocation", exact=True
+            )
+            expect(allocation_panel).to_contain_text("Divergent 75% · Czinger 25%")
+            assert allocation_panel.get_by_role("button").count() == 0
+            assert (
+                page.request.get(BASE + "/api/organization").json()["summary"]
+                == state_response["summary"]
+            )
+            page.screenshot(
+                path=str(ARTIFACTS / "calculated-manager-allocation.png"),
+                full_page=True,
+            )
+            page.get_by_role("textbox", name="Search organization").fill("Finn Young")
+            page.get_by_role("option").filter(has_text="Finn Young").click()
+            mark(
+                "Contributor allocations persist; managers transition from incomplete to calculated 75/25 without changing payroll"
+            )
             page.get_by_role(
                 "button", name="Focus on this organization", exact=True
             ).click()
@@ -231,6 +295,55 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             assert page.get_by_role("dialog").count() == 0
             mark(
                 "Narrow layout has no horizontal overflow; dialog keyboard focus and Escape work"
+            )
+            page.get_by_role("button", name="Model settings", exact=True).click()
+            page.get_by_role(
+                "heading", name="People, roles & contributor allocations"
+            ).wait_for()
+            page.get_by_label("Find model people").fill("Finn Young")
+            page.get_by_role("button", name="Edit person", exact=True).click()
+            page.get_by_label("FTE", exact=True).fill("0.5")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            expect(page.locator("tbody").first).to_contain_text("0.5")
+            page.get_by_label("Contractor participation").select_option("false")
+            page.get_by_label("Divergent executive-pool percentage").fill("90")
+            page.get_by_label("Executive pool members").select_option(["001"])
+            page.get_by_role(
+                "button", name="Save model & refresh preview", exact=True
+            ).click()
+            expect(page.get_by_text("90% / 10%", exact=False)).to_be_visible()
+            page.reload()
+            page.get_by_role("button", name="Model settings", exact=True).click()
+            expect(
+                page.get_by_label("Divergent executive-pool percentage")
+            ).to_have_value("90")
+            expect(page.get_by_label("Contractor participation")).to_have_value("false")
+            before = page.request.get(BASE + "/api/organization").json()["summary"][
+                "headcount"
+            ]
+            page.get_by_role(
+                "button", name="Add person or open role", exact=True
+            ).click()
+            page.get_by_label("Name", exact=True).fill("Synthetic draft position")
+            page.get_by_label("Job Title", exact=True).fill("Demo role")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            page.get_by_label("Find model people").fill("Synthetic draft position")
+            expect(page.locator("tbody").first).to_contain_text("DRAFT")
+            assert (
+                page.request.get(BASE + "/api/organization").json()["summary"][
+                    "headcount"
+                ]
+                == before
+            )
+            page.get_by_text("Department overhead breakdown", exact=True).click()
+            expect(page.locator(".department-overhead table")).to_be_visible()
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), "Model settings mobile overflow"
+            mark(
+                "Model person FTE and executive settings save and persist; mobile model fits viewport"
             )
             assert not errors, errors
             mark("No browser runtime errors")
