@@ -164,3 +164,9 @@ Admin/finance can delete a unit only after all direct employee records (includin
 The **Open roles** tab lists only `vacant` positions within the authorized scope, grouping by direct manager or nearest department ancestor. Drafts are separate from vacancies. Cards use a dashed outline, a briefcase icon and an OPEN ROLE label while preserving their tier background color. The chart’s Show open roles setting is saved in this browser. Hiding vacancies reconnects filled descendants to the nearest visible manager for display only, with dashed edges identifying a skipped open role; metrics and stored manager assignments are unchanged.
 
 Compensation is editable only by admin/finance and never included in general people/organization payloads. Editing a historical compensation period retains its recorded basis; a classification change does not rewrite past pay. Close the previous period before adding a new basis, because effective dates cannot overlap.
+
+## Banner counts
+
+Total People uses the same active-date and authorized-scope rules as headcount. Employment counts classify `FTE`, `Full Time`, `Full-time` and `Fulltime` as FTE people, and contractor/consultant/vendor/agency/temp labels as contractors. Other or missing imported labels are explicitly unclassified. These three counts reconcile to headcount; a fractional allocation FTE still counts as one person. Vacancies, drafts and people outside the selected employment interval are excluded.
+
+The “1 team” organizational banner is a shared-company message, not an extra stored unit. Its breakdown counts visible saved units by type: company, function, group, department, team, legacy subdepartment and subteam. Company/function/department/team counts remain visible when zero; additional populated types are included. It follows permission scope, not chart expansion or the open-role toggle.

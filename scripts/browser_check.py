@@ -58,7 +58,16 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(BASE)
-            page.get_by_role("heading", name="Organization", exact=True).wait_for()
+            page.get_by_role(
+                "heading", name="Build the new industrial Age", exact=True
+            ).wait_for()
+            expect(page.get_by_label("People summary")).to_contain_text(
+                "30 FTEs · 0 contractors"
+            )
+            expect(page.get_by_label("Organization summary")).to_contain_text("1 team")
+            expect(page.get_by_label("Organization summary")).to_contain_text(
+                "1 company · 0 functions · 3 groups · 6 departments · 0 teams · 1 subdepartment"
+            )
             page.wait_for_timeout(450)
             assert page.locator(".react-flow__node").count() == 1
             expect(

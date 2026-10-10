@@ -70,7 +70,11 @@ export type Organization = {
   units: Unit[];
   objectives: RecordData[];
   keyResults: RecordData[];
-  summary: Metric & { scope: string; aggregationPolicy: string };
+  summary: Metric & {
+    scope: string;
+    aggregationPolicy: string;
+    employmentCounts: { fte: number; contractor: number; unclassified: number };
+  };
   version: number;
   asOf: string;
   currency: string;

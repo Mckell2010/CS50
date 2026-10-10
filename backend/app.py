@@ -20,7 +20,7 @@ from backend.auth import (
 )
 from backend.db import Database, StaleWrite, previews, imports, audit
 from backend.domain import *
-from backend.allocations import allocation_summaries
+from backend.allocations import allocation_summaries, is_contractor
 from backend.importer import parse_workbook, MAX_UPLOAD
 from backend.sample import sample_state, workbook_bytes
 
@@ -188,6 +188,18 @@ def graph_data(state, p, as_of, currency):
     full["aggregationPolicy"] = (
         "Owners see one fixed scope total only, with at least 5 active people. Subtotals and individual pay are restricted."
     )
+    employment_counts = {"fte": 0, "contractor": 0, "unclassified": 0}
+    for person in people.values():
+        if not active(person, as_of):
+            continue
+        kind = person.get("EmploymentType", "").strip().lower().replace("-", " ")
+        category = (
+            "contractor"
+            if is_contractor(person)
+            else "fte" if kind in {"fte", "full time", "fulltime"} else "unclassified"
+        )
+        employment_counts[category] += 1
+    full["employmentCounts"] = employment_counts
     result["summary"] = full
     allocations = allocation_summaries(
         state,

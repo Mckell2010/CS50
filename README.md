@@ -35,6 +35,8 @@ The scripts read exported environment variables. `.env.example` documents config
 
 ## Workflows
 
+The organization headline reads “Build the new industrial Age”. The banner shows active people split into FTEs and contractors (with unclassified imports identified), plus “1 team” and live counts of companies, functions, groups, departments, teams and subtiers in the selected scope. These counts do not change when chart branches collapse or vacancies are hidden.
+
 - **People:** starts with the CEO only. Selecting a card reveals one layer and its details; the small chevron explicitly collapses a branch. Search reveals ancestors. Expand Next Layer, Collapse All, Focus, Fit, zoom, and pan work independently of aggregate calculations. Expansion/selection/overlay state is retained in the browser where records remain available.
 - **Card colors:** full person-card backgrounds follow organizational unit ancestry. **Color by** offers automatic coloring by expanded chart layers, or a fixed company/function/group/department/team/deeper tier. A legend names the units. Missing tier assignments use the nearest known higher unit with a fallback label; scoped-out ancestry stays neutral. Your color selection persists in this browser. These backgrounds do not change contributor company-allocation bars.
 - **Org structure:** create companies, tiers and subtiers, move branches, assign people to units, and set budgets at each level. Department codes and reporting managers remain separate. Delete empty units or remove an empty level while promoting its children; referenced people, budgets and OKRs must be reassigned first.

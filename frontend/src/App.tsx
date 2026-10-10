@@ -587,6 +587,31 @@ export default function App() {
       ? null
       : roots.reduce((sum, u) => sum + (u.metrics.envelope || 0), 0);
   const summary = data.summary;
+  const unitBreakdown = [
+    ["company", "company", "companies"],
+    ["function", "function", "functions"],
+    ["group", "group", "groups"],
+    ["department", "department", "departments"],
+    ["team", "team", "teams"],
+    ["subdepartment", "subdepartment", "subdepartments"],
+    ["subteam", "subteam", "subteams"],
+  ]
+    .map(([type, singular, plural]) => ({
+      type,
+      count: data.units.filter((u) => u.UnitType === type).length,
+      singular,
+      plural,
+    }))
+    .filter(
+      ({ type, count }) =>
+        count > 0 ||
+        ["company", "function", "department", "team"].includes(type),
+    )
+    .map(
+      ({ count, singular, plural }) =>
+        `${count.toLocaleString()} ${count === 1 ? singular : plural}`,
+    )
+    .join(" · ");
   const title =
     page === "structure"
       ? "Org structure"
@@ -595,7 +620,7 @@ export default function App() {
         : page === "model"
           ? "Model settings"
           : page === "organization"
-            ? "Organization"
+            ? "Build the new industrial Age"
             : page === "budgets"
               ? "Payroll & budgets"
               : "Objectives & key results";
@@ -792,7 +817,13 @@ export default function App() {
                 <span className="heading-dot" />
                 PEOPLE / STRUCTURE / RESOURCES
               </div>
-              <h1>{title}</h1>
+              <h1
+                className={
+                  page === "organization" ? "industrial-headline" : undefined
+                }
+              >
+                {title}
+              </h1>
               <p>
                 {page === "structure"
                   ? "Build the tiers that organize departments, budgets and objectives."
@@ -877,40 +908,32 @@ export default function App() {
             </div>
           </div>
           <section className="stats-grid">
-            <div className="stat-card">
+            <div className="stat-card" aria-label="People summary">
               <span>
-                Total people
+                Total People
                 <Users size={16} />
               </span>
-              <strong>
-                {summary.headcount}
-                <small>
-                  {summary.fte.toLocaleString()} known FTE
-                  {summary.missingFTE ? ` · ${summary.missingFTE} unknown` : ""}
-                </small>
-              </strong>
+              <strong>{summary.headcount.toLocaleString()}</strong>
+              <p className="stat-breakdown">
+                {summary.employmentCounts.fte.toLocaleString()} FTE
+                {summary.employmentCounts.fte === 1 ? "" : "s"} ·{" "}
+                {summary.employmentCounts.contractor.toLocaleString()}{" "}
+                contractor{summary.employmentCounts.contractor === 1 ? "" : "s"}
+                {summary.employmentCounts.unclassified > 0 &&
+                  ` · ${summary.employmentCounts.unclassified.toLocaleString()} unclassified`}
+              </p>
               <p>
                 <span className="stat-dot" />
                 Active in selected scope
               </p>
             </div>
-            <div className="stat-card">
+            <div className="stat-card" aria-label="Organization summary">
               <span>
                 Organizational units
                 <Building2 size={16} />
               </span>
-              <strong>
-                {data.units.length}
-                <small>
-                  {data.units.filter((u) => u.UnitType === "department").length}{" "}
-                  departments
-                </small>
-              </strong>
-              <p>
-                Connected across{" "}
-                {data.units.filter((u) => u.UnitType === "group").length}{" "}
-                department groups
-              </p>
+              <strong>1 team</strong>
+              <p className="stat-breakdown">{unitBreakdown}</p>
             </div>
             <div className="stat-card">
               <span>

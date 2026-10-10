@@ -1030,3 +1030,12 @@ td small,
     margin-left: 0;
   }
 }
+
+.page-heading h1.industrial-headline {
+  text-transform: none;
+}
+.stat-card p.stat-breakdown {
+  line-height: 1.65;
+  font-size: 12px;
+  white-space: normal;
+}

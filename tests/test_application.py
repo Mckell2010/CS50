@@ -893,3 +893,26 @@ def test_objectives_align_to_each_parent_tier_before_children(client, actor):
     assert edit(client, "Objectives", leaf).status_code == 200
     leaf["ParentObjectiveID"] = "objective-company"
     assert edit(client, "Objectives", leaf).status_code == 422
+
+
+@pytest.mark.parametrize("actor", ["admin", "owner", "viewer"])
+def test_banner_employment_counts_follow_active_scope(client, actor):
+    state, version = module.DB.read()
+    state["Employees"]["001"].update(EmploymentType="Contractor", ExemptionStatus="")
+    state["Employees"]["011"].update(EmploymentType="Contractor", ExemptionStatus="")
+    state["Employees"]["012"].update(EmploymentType="Full Time", ExemptionStatus="")
+    state["Employees"]["013"]["EmploymentStatus"] = "vacant"
+    state["Employees"]["014"]["EmploymentStatus"] = "draft"
+    state["Employees"]["015"]["EndDate"] = "2025-12-31"
+    state["Employees"]["016"]["StartDate"] = "2099-01-01"
+    state["Employees"]["018"].update(EmploymentType="", ExemptionStatus="", FTE="0.5")
+    module.DB.save(state, version, "test", "employment-counts")
+    role(client, actor)
+    graph = client.get("/api/organization").json()
+    counts = graph["summary"]["employmentCounts"]
+    assert sum(counts.values()) == graph["summary"]["headcount"]
+    assert counts["contractor"] == (1 if actor == "owner" else 2)
+    assert counts["unclassified"] == 1
+    assert counts["fte"] == graph["summary"]["headcount"] - counts["contractor"] - 1
+    # A fractional FTE is one person, and legacy full-time rows remain classified.
+    assert any(p["EmployeeID"] == "012" for p in graph["employees"])

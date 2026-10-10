@@ -128,3 +128,7 @@ Validated October 10, 2026: 123 API/domain tests and 9 TypeScript helper tests p
 - Desktop and 390 px mobile structure layouts; previous allocations, budgets, OKRs, imports and permissions remain covered.
 
 Browser checks use only an isolated synthetic database. Screenshots and logs remain in ignored artifacts. Existing Starlette deprecation and Vite bundle-size advisories remain nonblocking.
+
+## Banner update
+
+The organization headline is “Build the new industrial Age”. Banner headcount now reconciles FTE, contractor and unclassified people using the selected date and authorized scope, with vacancies/drafts excluded. “1 team” accompanies live unit counts. Validation: 126 backend tests, 9 TypeScript helper tests, the production build, and 21 browser workflow groups passed. Desktop and mobile layouts were checked; branch collapse leaves the banner counts unchanged.
