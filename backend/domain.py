@@ -53,6 +53,8 @@ COLUMNS = {
         "Currency",
         "ApprovedEnvelope",
         "DirectAllocation",
+        "AllocationPercent",
+        "DirectPercent",
     ],
     "Objectives": [
         "ObjectiveID",
@@ -238,6 +240,17 @@ def validate(state):
     for sheet, records in state.items():
         for key, row in records.items():
             for field in REQUIRED[sheet]:
+                if sheet == "Budgets" and (
+                    (
+                        field == "ApprovedEnvelope"
+                        and row.get("AllocationPercent", "") != ""
+                    )
+                    or (
+                        field == "DirectAllocation"
+                        and row.get("DirectPercent", "") != ""
+                    )
+                ):
+                    continue
                 if (
                     sheet == "Compensation"
                     and row.get("PayBasis")
@@ -292,6 +305,8 @@ def validate(state):
                     "TargetValue",
                     "BudgetYear",
                     "AnnualHours",
+                    "AllocationPercent",
+                    "DirectPercent",
                 ]:
                     try:
                         n = number(value)
@@ -303,6 +318,11 @@ def validate(state):
                             raise ValueError(
                                 "Use a nonnegative amount with at most two decimals (maximum 1 trillion)"
                             )
+                        if (
+                            field in {"AllocationPercent", "DirectPercent"}
+                            and not 0 <= n <= 100
+                        ):
+                            raise ValueError("Percentage must be between 0 and 100")
                         if field == "AnnualHours" and not 0 <= n <= 8784:
                             raise ValueError("Annual hours must be between 0 and 8784")
                         if field == "FTE" and not 0 <= n <= 1:
@@ -379,6 +399,28 @@ def validate(state):
                 "INR",
             }:
                 err(sheet, row, "Currency", "Unsupported currency code")
+            if sheet == "Budgets" and row.get("AllocationPercent", "") != "":
+                unit = state["OrganizationalUnits"].get(row.get("OrgUnitID"), {})
+                parent = unit.get("ParentOrgUnitID")
+                if not parent or unit.get("UnitType") == "company":
+                    err(
+                        sheet,
+                        row,
+                        "AllocationPercent",
+                        "Company budgets must use a dollar amount",
+                    )
+                elif not any(
+                    b.get("OrgUnitID") == parent
+                    and str(b.get("BudgetYear")) == str(row.get("BudgetYear"))
+                    and b.get("Currency") == row.get("Currency")
+                    for b in state["Budgets"].values()
+                ):
+                    err(
+                        sheet,
+                        row,
+                        "AllocationPercent",
+                        "Set the parent budget for this year and currency first",
+                    )
             if sheet == "CompanyAllocations":
                 try:
                     if number(row.get("DivergentPercent", "")) not in {
@@ -742,12 +784,101 @@ def kr_progress(row, as_of):
     return result
 
 
-def budget_metrics(state, unit, year, currency, as_of, executive_ids=()):
+def resolved_budgets(state, year, currency):
+    """Resolve parent-relative budgets in cents, reconciling sibling rounding."""
     rows = {
-        r["OrgUnitID"]: r
-        for r in state["Budgets"].values()
-        if str(r["BudgetYear"]) == str(year) and r["Currency"] == currency
+        b["OrgUnitID"]: b
+        for b in state["Budgets"].values()
+        if str(b["BudgetYear"]) == str(year) and b["Currency"] == currency
     }
+    child_map = children(state["OrganizationalUnits"], "ParentOrgUnitID")
+    envelopes = {
+        key: cents(b["ApprovedEnvelope"])
+        for key, b in rows.items()
+        if b.get("AllocationPercent", "") == ""
+    }
+    direct = {}
+    pending = list(envelopes)
+    visited = set()
+    while pending:
+        key = pending.pop()
+        if key in visited:
+            continue
+        visited.add(key)
+        row, env = rows[key], envelopes[key]
+        shares = {
+            child: number(rows[child]["AllocationPercent"])
+            for child in child_map.get(key, [])
+            if child in rows and rows[child].get("AllocationPercent", "") != ""
+        }
+        # Tuple keys avoid collisions with user-defined unit IDs.
+        parts = {
+            ("child", child): Decimal(env) * pct / 100 for child, pct in shares.items()
+        }
+        if row.get("DirectPercent", "") != "":
+            parts[("direct", key)] = Decimal(env) * number(row["DirectPercent"]) / 100
+        rounded = {part: int(value) for part, value in parts.items()}
+        remainder = int(sum(parts.values(), Decimal(0)).quantize(Decimal("1"))) - sum(
+            rounded.values()
+        )
+        for part in sorted(
+            parts, key=lambda part: (-(parts[part] - rounded[part]), part)
+        )[:remainder]:
+            rounded[part] += 1
+        direct[key] = rounded.get(
+            ("direct", key), cents(row.get("DirectAllocation") or 0)
+        )
+        for child in shares:
+            envelopes[child] = rounded[("child", child)]
+            pending.append(child)
+    return rows, envelopes, direct
+
+
+def convert_budget_percentages(state, year, currency, actor, allowed_units):
+    """Capture legacy ratios before a parent changes; never invent a zero-parent ratio."""
+    rows, envelopes, _ = resolved_budgets(state, year, currency)
+    changed = []
+    for key, row in rows.items():
+        if key not in allowed_units:
+            continue
+        unit = state["OrganizationalUnits"][key]
+        parent = unit.get("ParentOrgUnitID")
+        updates = {}
+        if (
+            unit.get("UnitType") != "company"
+            and parent in allowed_units
+            and row.get("AllocationPercent", "") == ""
+            and envelopes.get(parent, 0) > 0
+            and 0 <= envelopes.get(key, 0) <= envelopes[parent]
+        ):
+            updates["AllocationPercent"] = str(
+                Decimal(envelopes[key]) * 100 / envelopes[parent]
+            )
+        if row.get("DirectPercent", "") == "" and envelopes.get(key, 0) > 0:
+            percentage = (
+                Decimal(cents(row.get("DirectAllocation") or 0)) * 100 / envelopes[key]
+            )
+            if 0 <= percentage <= 100:
+                updates["DirectPercent"] = str(percentage)
+        if updates:
+            changed.append(
+                {
+                    "id": record_key("Budgets", row),
+                    "before": copy.deepcopy(row),
+                    "percentages": updates,
+                }
+            )
+            row.update(
+                updates,
+                _source="app",
+                _editor=actor,
+                _modified=datetime.now().isoformat(),
+            )
+    return changed
+
+
+def budget_metrics(state, unit, year, currency, as_of, executive_ids=()):
+    rows, envelopes, direct_amounts = resolved_budgets(state, year, currency)
     b = rows.get(unit)
     units = descendants(state["OrganizationalUnits"], "ParentOrgUnitID", unit)
     people = {k for k, e in state["Employees"].items() if e["OrgUnitID"] in units}
@@ -764,14 +895,12 @@ def budget_metrics(state, unit, year, currency, as_of, executive_ids=()):
         "direct": payroll(state, direct, as_of, currency),
         "budget": b,
     }
-    if b:
+    if b and unit in envelopes:
         child_units = children(state["OrganizationalUnits"], "ParentOrgUnitID").get(
             unit, []
         )
-        allocated = sum(
-            cents(rows[k]["ApprovedEnvelope"]) for k in child_units if k in rows
-        )
-        env, allocation = cents(b["ApprovedEnvelope"]), cents(b["DirectAllocation"])
+        allocated = sum(envelopes[k] for k in child_units if k in envelopes)
+        env, allocation = envelopes[unit], direct_amounts[unit]
         result.update(
             envelope=env / 100,
             directAllocation=allocation / 100,
@@ -779,6 +908,11 @@ def budget_metrics(state, unit, year, currency, as_of, executive_ids=()):
             unallocated=(env - allocation - allocated) / 100,
             headroom=env / 100 - result["total"]["payroll"],
             directHeadroom=allocation / 100 - result["direct"]["payroll"],
-            missingChildBudgets=sum(k not in rows for k in child_units),
+            missingChildBudgets=sum(k not in envelopes for k in child_units),
+            allocationPercent=(
+                float(number(b["AllocationPercent"]))
+                if b.get("AllocationPercent", "") != ""
+                else None
+            ),
         )
     return result

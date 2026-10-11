@@ -80,12 +80,16 @@ Missing compensation is an absent effective row, **not zero**. Required pay fiel
 | OrgUnitID | Yes | Unit receiving the envelope. |
 | BudgetYear | Yes | Whole calendar year from 2000 to 2200. |
 | Currency | Yes | Budget currency. One budget per unit/year/currency. |
-| ApprovedEnvelope | Yes | Annual total covering this unit **and all descendants**. |
-| DirectAllocation | Yes | Reserved for employees directly assigned to this unit. |
+| ApprovedEnvelope | Company / legacy | Company annual dollar budget covering the unit and descendants. Ignored when AllocationPercent is present. |
+| DirectAllocation | Legacy | Fixed direct-employee reserve; ignored when DirectPercent is present. |
+| AllocationPercent | Child budgets in the editor | 0–100% of the immediate parent budget, for the same year/currency. Recalculates through every descendant. Company budgets cannot use this field. |
+| DirectPercent | Editor budgets | 0–100% of this unit’s own resulting budget reserved for directly assigned employees. |
 
-`Unallocated = ApprovedEnvelope − DirectAllocation − SUM(immediate child envelopes)`.
-`Unit run-rate headroom = ApprovedEnvelope − inclusive annualized payroll`.
-`Direct run-rate headroom = DirectAllocation − directly assigned annualized payroll`.
+`Resulting child budget = resolved parent budget × AllocationPercent / 100`.
+`Direct reserve = resolved unit budget × DirectPercent / 100`.
+`Unallocated = resolved unit budget − direct reserve − SUM(resolved immediate child budgets)`.
+`Unit run-rate headroom = resolved unit budget − inclusive annualized payroll`.
+`Direct run-rate headroom = resolved direct reserve − directly assigned annualized payroll`.
 Only matching year, currency and organizational scope are compared. Parent and child envelopes are never summed into a company budget; the top summary sums non-overlapping root envelopes only. Missing budgets remain distinct from explicit zero; missing child budgets are flagged. Negative unallocated amounts are visibly over-allocated. Import/Finance can represent an over-allocated plan for review; Owner mutations reject allocations exceeding any relevant envelope and require budgeted ancestors. Increasing an owner's assigned envelope requires Administrator/Finance.
 
 ### Executive costs roll upward only
@@ -170,3 +174,11 @@ Compensation is editable only by admin/finance and never included in general peo
 Total People uses the same active-date and authorized-scope rules as headcount. Employment counts classify `FTE`, `Full Time`, `Full-time` and `Fulltime` as FTE people, and contractor/consultant/vendor/agency/temp labels as contractors. Other or missing imported labels are explicitly unclassified. These three counts reconcile to headcount; a fractional allocation FTE still counts as one person. Vacancies, drafts and people outside the selected employment interval are excluded.
 
 The “1 team” organizational banner is a shared-company message, not an extra stored unit. Its breakdown counts visible saved units by type: company, function, group, department, team, legacy subdepartment and subteam. Company/function/department/team counts remain visible when zero; additional populated types are included. It follows permission scope, not chart expansion or the open-role toggle.
+
+### Percentage-budget editing and legacy conversion
+
+Company budgets stay in dollars. Lower-tier forms accept a parent percentage, with a live resulting-dollar preview and parent remaining/over-allocation feedback. The direct-employee reserve is also a percentage. Percentages may have fractional digits; each individual input is finite and within 0–100. Finance can retain a combined over-allocation for review and reduction; owners cannot over-allocate or change their approved parent share.
+
+Saving with the percentage controls first captures eligible existing fixed-budget ratios for the selected year/currency within the editor’s authorized units, using values from **before** the edit. These converted records become app-owned in the same version-checked transaction, with original rows recorded in the audit. This preserves existing amounts during conversion and lets parent changes flow downward. A zero/missing parent or a fixed child larger than its parent cannot yield a valid percentage: its fixed amount is retained and labeled until the user explicitly chooses a percentage. Old fixed-amount workbooks remain readable. Nonblank percentage fields are authoritative over legacy dollar columns in exports.
+
+Calculations use Decimal and integer cents. Percentage child shares and the direct reserve are apportioned together per parent using largest remainders, with stable ID tie-breaking. A combined 100% reconciles to the parent budget exactly, avoiding spurious one-cent over-allocation. Changing budgets affects allocations and headroom, not actual payroll.

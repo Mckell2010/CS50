@@ -55,6 +55,11 @@ def parse_workbook(content, mapping=None):
             if name in names
         }
         for field in REQUIRED[sheet]:
+            if sheet == "Budgets" and (
+                (field == "ApprovedEnvelope" and "AllocationPercent" in indexes)
+                or (field == "DirectAllocation" and "DirectPercent" in indexes)
+            ):
+                continue
             if (
                 sheet == "Compensation"
                 and "PayBasis" in indexes

@@ -1039,3 +1039,14 @@ td small,
   font-size: 12px;
   white-space: normal;
 }
+
+.budget-percentage-preview {
+  display: block;
+}
+.budget-percentage-preview p {
+  margin: 8px 0;
+}
+.budget-percentage-preview small {
+  display: block;
+  line-height: 1.6;
+}

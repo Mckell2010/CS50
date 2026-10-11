@@ -284,7 +284,7 @@ def workbook_bytes(state=None, synthetic=False):
             "Synthetic examples use invented people and data except the named example CEO. Actual exports retain the imported records."
         ],
         [
-            "IDs are text. Preserve leading zeros. Dates use YYYY-MM-DD. Currency defaults to USD; annual budgets use calendar years."
+            "IDs are text. Preserve leading zeros. Dates use YYYY-MM-DD. Currency defaults to USD; annual budgets use calendar years. Company budgets use ApprovedEnvelope dollars; child budgets use AllocationPercent of their parent. DirectPercent reserves a share for directly assigned employees."
         ],
         [
             "PayBasis: salary (annual base + annual bonus), hourly (HourlyRate x AnnualHours), monthly (MonthlyRate x 12). Blank PayBasis retains legacy annual amounts. Never multiply pay by FTE again."

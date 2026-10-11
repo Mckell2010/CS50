@@ -47,6 +47,7 @@ export type Unit = RecordData & {
     direct: Metric;
     budget?: RecordData;
     envelope?: number;
+    allocationPercent?: number | null;
     unallocated?: number;
     headroom?: number;
     directAllocation?: number;

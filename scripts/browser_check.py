@@ -443,19 +443,59 @@ with tempfile.TemporaryDirectory(prefix="divergent-browser-") as tmp:
                 "button", name="Set company budget for Divergent", exact=True
             ).click()
             page.get_by_label("Approved Envelope", exact=True).fill("10000000")
-            page.get_by_label("Direct Allocation", exact=True).fill("0")
+            page.get_by_label("Reserved for direct employees (%)", exact=True).fill("0")
             page.get_by_role("button", name="Save changes", exact=True).click()
             expect(page.get_by_role("dialog")).to_have_count(0)
             expect(
                 page.locator('[data-budget-unit="eng"] button.table-edit')
             ).to_be_enabled()
             page.locator('[data-budget-unit="eng"] button.table-edit').click()
-            page.get_by_label("Approved Envelope", exact=True).fill("3000000")
+            expect(page.get_by_label("Approved Envelope", exact=True)).to_have_count(0)
+            page.get_by_label("Share of parent budget (%)", exact=True).fill("30")
+            expect(page.get_by_role("dialog")).to_contain_text(
+                "Resulting budget: $3,000,000"
+            )
             page.get_by_role("button", name="Save changes", exact=True).click()
             expect(page.get_by_role("dialog")).to_have_count(0)
             page.get_by_role(
+                "button", name="Edit company budget for Divergent", exact=True
+            ).click()
+            page.get_by_label("Approved Envelope", exact=True).fill("20000000")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            expect(page.locator('[data-budget-unit="eng"]')).to_contain_text(
+                "$6,000,000"
+            )
+            page.get_by_role(
                 "button", name="Expand budget tiers under Engineering", exact=True
             ).click()
+            page.locator('[data-budget-unit="vehicle"] button.table-edit').click()
+            page.get_by_label("Share of parent budget (%)", exact=True).fill("25")
+            expect(page.get_by_role("dialog")).to_contain_text(
+                "Resulting budget: $1,500,000"
+            )
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            page.locator('[data-budget-unit="eng"] button.table-edit').click()
+            page.get_by_label("Share of parent budget (%)", exact=True).fill("20")
+            page.get_by_role("button", name="Save changes", exact=True).click()
+            expect(page.get_by_role("dialog")).to_have_count(0)
+            expect(page.locator('[data-budget-unit="vehicle"]')).to_contain_text(
+                "$1,000,000"
+            )
+            graph = page.request.get(BASE + "/api/organization?as_of=2030-01-01").json()
+            assert (
+                next(u for u in graph["units"] if u["OrgUnitID"] == "vehicle")[
+                    "metrics"
+                ]["budget"]["AllocationPercent"]
+                == "25"
+            )
+            page.screenshot(
+                path=str(ARTIFACTS / "percentage-budgets-mobile.png"), full_page=True
+            )
+            mark(
+                "Child percentages preview dollars and cascade after company and parent percentage changes"
+            )
             expect(
                 page.locator('[data-budget-unit="vehicle"] button.table-edit')
             ).to_be_enabled()

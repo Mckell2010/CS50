@@ -577,7 +577,7 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
     record = {k: clean_value(body.record.get(k, "")) for k in COLUMNS[sheet]}
     if record_key(sheet, record) != ident:
         raise HTTPException(400, "Record ID must match URL")
-    existing = state[sheet].get(ident)
+    existing = copy.deepcopy(state[sheet].get(ident))
     if sheet == "Employees":
         require_admin(p)
         employment = record.get("EmploymentType")
@@ -696,7 +696,10 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
                 403, "Owners allocate the current approved USD envelope only"
             )
         if record["OrgUnitID"] == p.unit and (
-            not existing or record["ApprovedEnvelope"] != existing["ApprovedEnvelope"]
+            not existing
+            or record["ApprovedEnvelope"] != existing["ApprovedEnvelope"]
+            or record.get("AllocationPercent", "")
+            != existing.get("AllocationPercent", "")
         ):
             raise HTTPException(
                 403, "Finance must approve changes to your assigned envelope"
@@ -707,6 +710,13 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
             raise HTTPException(
                 403, "Budget scope, year, and currency cannot be reassigned"
             )
+    converted_budgets = []
+    if sheet == "Budgets" and any(
+        field in body.record for field in ["AllocationPercent", "DirectPercent"]
+    ):
+        converted_budgets = convert_budget_percentages(
+            state, record["BudgetYear"], record["Currency"], p.id, units
+        )
     record.update(
         _source="app", _editor=p.id, _modified=datetime.now(timezone.utc).isoformat()
     )
@@ -778,6 +788,7 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
             "id": ident,
             "before": public(existing) if existing else None,
             "after": public(record),
+            **({"convertedBudgets": converted_budgets} if converted_budgets else {}),
         },
     )
     return {"version": body.version + 1}

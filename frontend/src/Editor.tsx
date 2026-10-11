@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Check, AlertTriangle } from "lucide-react";
-import { api, type Organization, type RecordData } from "./types";
+import { api, money, type Organization, type RecordData } from "./types";
 import { unitTier } from "./orgColors";
 const LOCATION_OPTIONS = [
   "Los Angeles - HQ",
@@ -52,7 +52,8 @@ export const FIELDS: Record<string, string[]> = {
     "BudgetYear",
     "Currency",
     "ApprovedEnvelope",
-    "DirectAllocation",
+    "DirectPercent",
+    "AllocationPercent",
   ],
   Objectives: [
     "ObjectiveID",
@@ -93,6 +94,8 @@ const label = (s: string) =>
       AnnualTargetBonus: "Annual bonus",
       AnnualHours: "Expected annual hours",
       ExemptionStatus: "FTE classification",
+      AllocationPercent: "Share of parent budget (%)",
+      DirectPercent: "Reserved for direct employees (%)",
     })[s] || s
   )
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -114,6 +117,37 @@ export default function Editor({
   const [form, setForm] = useState<RecordData>(record),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const budgetUnit = data.units.find((u) => u.OrgUnitID === form.OrgUnitID);
+  const budgetParent = data.units.find(
+    (u) => u.OrgUnitID === budgetUnit?.ParentOrgUnitID,
+  );
+  const isChildBudget =
+    !!budgetUnit?.ParentOrgUnitID && budgetUnit.UnitType !== "company";
+  const matchingPeriod =
+    String(form.BudgetYear) === data.asOf.slice(0, 4) &&
+    form.Currency === data.currency;
+  const parentAmount = matchingPeriod
+    ? budgetParent?.metrics.envelope
+    : undefined;
+  const budgetPreview = isChildBudget
+    ? parentAmount != null && form.AllocationPercent !== ""
+      ? (parentAmount * Number(form.AllocationPercent)) / 100
+      : undefined
+    : form.AllocationPercent
+      ? budgetUnit?.metrics.envelope
+      : Number(form.ApprovedEnvelope || 0);
+  const parentReserved = budgetParent?.metrics.directAllocation || 0;
+  const siblingAmount = data.units
+    .filter(
+      (u) =>
+        u.ParentOrgUnitID === budgetUnit?.ParentOrgUnitID &&
+        u.OrgUnitID !== form.OrgUnitID,
+    )
+    .reduce((sum, u) => sum + (u.metrics.envelope || 0), 0);
+  const remaining =
+    isChildBudget && parentAmount != null && budgetPreview != null
+      ? parentAmount - parentReserved - siblingAmount - budgetPreview
+      : undefined;
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -166,16 +200,52 @@ export default function Editor({
             </div>
           )}
           {sheet === "Budgets" && (
-            <p className="notice">
-              {
-                data.units.find((u) => u.OrgUnitID === form.OrgUnitID)
-                  ?.OrgUnitName
-              }
-              : Approved Envelope is the annual payroll budget for this unit and
-              everything beneath it. Direct Allocation reserves part of that
-              budget for directly assigned employees; the rest can fund the next
-              tier. Child budgets are included in the parent total.
-            </p>
+            <div className="notice budget-percentage-preview">
+              <strong>{budgetUnit?.OrgUnitName}</strong>
+              <p>
+                {isChildBudget
+                  ? "Set the percentage of the immediate parent budget. The resulting dollars and percentage-based descendants update when the parent changes."
+                  : "Set the company payroll budget in dollars. Lower tiers receive percentages of their immediate parent."}
+              </p>
+              {isChildBudget && (
+                <p>
+                  Parent budget:{" "}
+                  {parentAmount == null
+                    ? "Select a period with a saved parent budget"
+                    : money(parentAmount, form.Currency)}
+                </p>
+              )}
+              <p aria-live="polite">
+                Resulting budget:{" "}
+                <strong>
+                  {budgetPreview == null
+                    ? "Enter a percentage"
+                    : money(budgetPreview, form.Currency)}
+                </strong>
+              </p>
+              {budgetPreview != null && (
+                <p>
+                  Direct employee reserve:{" "}
+                  {money(
+                    (budgetPreview * Number(form.DirectPercent || 0)) / 100,
+                    form.Currency,
+                  )}
+                </p>
+              )}
+              {remaining != null && (
+                <p className={remaining < -0.005 ? "stale" : ""}>
+                  {remaining < -0.005
+                    ? `Parent over-allocated by ${money(-remaining, form.Currency)}. Reduce this share or another allocation.`
+                    : `Parent remaining after this change: ${money(remaining, form.Currency)}`}
+                </p>
+              )}
+              <small>
+                Existing fixed budgets convert to their current percentages
+                where possible when you save. Zero or missing parent amounts
+                need an explicit percentage. Final amounts reconcile to cents
+                across siblings.
+              </small>
+            </div>
           )}
           {sheet === "OrganizationalUnits" && (
             <p className="notice">
@@ -213,6 +283,12 @@ export default function Editor({
           )}
           <div className="editor-grid">
             {FIELDS[sheet].map((field, i) => {
+              if (
+                sheet === "Budgets" &&
+                ((field === "ApprovedEnvelope" && isChildBudget) ||
+                  (field === "AllocationPercent" && !isChildBudget))
+              )
+                return null;
               if (field === "ExemptionStatus" && form.EmploymentType !== "FTE")
                 return null;
               if (
@@ -425,6 +501,10 @@ export default function Editor({
                     <input
                       {...props}
                       readOnly={
+                        (sheet === "Budgets" &&
+                          field === "ApprovedEnvelope" &&
+                          !!form.AllocationPercent &&
+                          !isChildBudget) ||
                         i === 0 ||
                         (sheet === "Compensation" &&
                           field === "EffectiveFrom" &&
@@ -451,7 +531,8 @@ export default function Editor({
                                 "Tier",
                                 "BudgetYear",
                                 "ApprovedEnvelope",
-                                "DirectAllocation",
+                                "DirectPercent",
+                                "AllocationPercent",
                                 "Baseline",
                                 "CurrentValue",
                                 "TargetValue",
@@ -460,12 +541,25 @@ export default function Editor({
                             : "text"
                       }
                       step={field === "Tier" ? "1" : "any"}
+                      max={
+                        ["AllocationPercent", "DirectPercent"].includes(field)
+                          ? 100
+                          : undefined
+                      }
                       min={
-                        field === "Tier" || sheet === "Compensation"
+                        field === "Tier" ||
+                        sheet === "Compensation" ||
+                        sheet === "Budgets"
                           ? 0
                           : undefined
                       }
                       required={
+                        (sheet === "Budgets" &&
+                          [
+                            "ApprovedEnvelope",
+                            "AllocationPercent",
+                            "DirectPercent",
+                          ].includes(field)) ||
                         i === 0 ||
                         ["OrgUnitName", "MetricName"].includes(field) ||
                         (sheet === "Compensation" && field !== "EffectiveTo")
@@ -490,9 +584,9 @@ export default function Editor({
           </p>
           {sheet === "Budgets" && (
             <p className="notice">
-              The envelope includes this unit and descendants. Direct allocation
-              reserves money for people assigned directly to this unit. Owners
-              cannot increase their finance-approved envelope.
+              The budget includes this unit and descendants. The direct reserve
+              percentage reserves money for people assigned directly to this
+              unit. Owners cannot increase their finance-approved envelope.
             </p>
           )}
           <div className="form-actions">

@@ -325,18 +325,38 @@ export default function App() {
       },
     });
   };
-  const editBudget = (u: Unit) =>
+  const editBudget = (u: Unit) => {
+    const existing = u.metrics.budget;
+    const parent = data?.units.find((p) => p.OrgUnitID === u.ParentOrgUnitID);
+    const percent = (amount: number, total: number) =>
+      String((amount / total) * 100);
+    const parentShare = existing?.AllocationPercent ?? "";
     setEditor({
       sheet: "Budgets",
-      record: u.metrics.budget || {
-        BudgetID: uid("budget"),
-        OrgUnitID: u.OrgUnitID,
-        BudgetYear: asOf.slice(0, 4),
-        Currency: currency,
-        ApprovedEnvelope: "0",
-        DirectAllocation: "0",
+      record: {
+        ...(existing || {
+          BudgetID: uid("budget"),
+          OrgUnitID: u.OrgUnitID,
+          BudgetYear: asOf.slice(0, 4),
+          Currency: currency,
+          ApprovedEnvelope: "0",
+          DirectAllocation: "0",
+        }),
+        AllocationPercent:
+          parentShare !== ""
+            ? parentShare
+            : u.UnitType !== "company" && existing && parent?.metrics.envelope
+              ? percent(u.metrics.envelope || 0, parent.metrics.envelope)
+              : "",
+        DirectPercent:
+          existing?.DirectPercent !== undefined && existing.DirectPercent !== ""
+            ? existing.DirectPercent
+            : existing && u.metrics.envelope
+              ? percent(u.metrics.directAllocation || 0, u.metrics.envelope)
+              : "0",
       },
     });
+  };
   const newObjective = (unitId?: string) =>
     setEditor({
       sheet: "Objectives",
@@ -1687,8 +1707,9 @@ export default function App() {
                   </div>
                   <div className="budget-tree-toolbar">
                     <p>
-                      Allocate from each parent budget into the next tier. Child
-                      budgets are portions of the company total.
+                      Tune each child’s percentage of its immediate parent
+                      budget. Resulting dollar budgets cascade through every
+                      lower tier.
                     </p>
                     <button
                       className="secondary"
@@ -1718,7 +1739,8 @@ export default function App() {
                           <th>Organizational unit</th>
                           <th>People</th>
                           <th>Payroll run rate</th>
-                          <th>Envelope</th>
+                          <th>Parent budget %</th>
+                          <th>Resulting budget</th>
                           <th>Run-rate headroom</th>
                           <th>Unallocated</th>
                           <th />
@@ -1772,6 +1794,21 @@ export default function App() {
                                     Incomplete compensation
                                   </small>
                                 )}
+                            </td>
+                            <td>
+                              {u.UnitType === "company" ||
+                              !u.ParentOrgUnitID ? (
+                                "—"
+                              ) : !u.metrics.budget ? (
+                                "Not set"
+                              ) : u.metrics.allocationPercent != null ? (
+                                `${u.metrics.allocationPercent.toLocaleString(undefined, { maximumSignificantDigits: 6 })}%`
+                              ) : (
+                                <span className="muted">
+                                  Set percentage
+                                  <small>Existing fixed amount</small>
+                                </span>
+                              )}
                             </td>
                             <td>
                               {u.metrics.budget ? (
@@ -1843,8 +1880,9 @@ export default function App() {
                     <Info size={17} />
                     <p>
                       Unallocated = envelope − direct allocation − immediate
-                      child envelopes. Owners see one fixed current scope
-                      payroll aggregate for groups of 5 or more; nested payroll
+                      child budgets. Percentage budgets recalculate down the
+                      hierarchy. Owners see one fixed current scope payroll
+                      aggregate for groups of 5 or more; nested payroll
                       subtotals are restricted to prevent subtraction-based
                       disclosure.
                     </p>
