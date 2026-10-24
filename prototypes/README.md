@@ -16,3 +16,7 @@ Click **Open Excel workbook** and select **Org Chart Organizer.xlsx**. Only the 
 - Click a sidebar item to focus it. **Table** shows the structure as rows; click a row to locate it in the tree.
 
 The included example is synthetic. This is a read-only interaction prototype, separate from the full application: it does not edit data, calculate budgets, or filter by employing entity. Reloading resets the view; reopen your workbook to restore its data. Parent IDs determine displayed hierarchy depth. Department IDs should be stored as text in Excel to preserve leading zeros.
+
+Workbook updates replace the currently displayed structure, using the workbook’s current names, owners, codes, and purpose statements. No earlier code-to-department mappings are hard-coded.
+
+If multiple units share a Department ID, the viewer keeps them separate and displays an import-review notice with their Excel row numbers. Original department codes remain visible. This works when parent references are unambiguous; if a Parent ID could refer to multiple units, the import explains which rows need unique codes and leaves the current chart unchanged.
