@@ -144,6 +144,7 @@ export const groupColors: Record<string, string> = {
   eng: "#363e46",
   ops: "#687078",
   growth: "#888e94",
+  corporate: "#141719",
   company: "#141719",
 };
 export function colorFor(unit: string, data: Organization): string {
@@ -332,7 +333,7 @@ function ChartInner({
           title: r[titleField],
           subtitle: unit
             ? data.employees.find((e) => e.EmployeeID === r.OwnerEmployeeID)
-                ?.Name || "Owner unassigned"
+                ?.Name || r.DepartmentOwner || "Owner unassigned"
             : r.JobTitle,
           color: colors.get(r.OrgUnitID)?.accent || "#686868",
           background: colors.get(r.OrgUnitID)?.background || "#eeeeec",

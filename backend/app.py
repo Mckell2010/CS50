@@ -23,6 +23,8 @@ from backend.domain import *
 from backend.allocations import allocation_summaries, is_contractor
 from backend.importer import parse_workbook, MAX_UPLOAD
 from backend.sample import sample_state, workbook_bytes
+from backend.organizer import organizer_import
+from backend.entity_view import entity_view, entity_units
 
 DB = Database()
 
@@ -140,8 +142,11 @@ def public(row):
     return {k: v for k, v in row.items() if not k.startswith("_")}
 
 
-def graph_data(state, p, as_of, currency):
-    units = visible_units(state, p)
+def graph_data(state, p, as_of, currency, entity="both"):
+    original = state
+    authorized = visible_units(state, p)
+    state = entity_view(state, entity)
+    units = entity_units(state, authorized, entity)
     people = {
         k: e
         for k, e in state["Employees"].items()
@@ -159,7 +164,7 @@ def graph_data(state, p, as_of, currency):
             {
                 k: o
                 for k, o in state["Objectives"].items()
-                if state["OrganizationalUnits"][o["OrgUnitID"]]["UnitType"] == "company"
+                if state["OrganizationalUnits"][o["OrgUnitID"]]["UnitType"] in {"company", "corporate"}
             }
         )
     result = {"employees": [], "units": [], "objectives": [], "keyResults": []}
@@ -178,10 +183,10 @@ def graph_data(state, p, as_of, currency):
         return safe_metric(payroll(state, ids, as_of, currency), allow)
 
     full = scope_metric(
-        set(people), p.finance or (p.role == "owner" and active_count >= 5)
+        set(people), p.finance or (p.role == "owner" and active_count >= 5 and entity == "both")
     )
     full["scope"] = (
-        "Company"
+        "Corporate"
         if p.role != "owner"
         else org.get(p.unit, {}).get("OrgUnitName", "Assigned scope")
     )
@@ -202,14 +207,15 @@ def graph_data(state, p, as_of, currency):
     full["employmentCounts"] = employment_counts
     result["summary"] = full
     allocations = allocation_summaries(
-        state,
+        original,
         as_of,
-        set(people),
+        {k for k,e in original["Employees"].items() if e["OrgUnitID"] in authorized and (active(e, as_of) or e.get("EmploymentStatus") in {"vacant", "draft"})},
         DB.get_setting("model", {}).get("includeContractors", True),
     )
     emp_children = children(people, "ManagerID")
     for k, e in people.items():
         row = public(e)
+        if p.role != "admin": row.pop("StoredManagerID", None)
         row["ManagerID"] = e.get("ManagerID") if e.get("ManagerID") in people else ""
         row["companyAllocation"] = allocations[k]
         row["companyAllocation"]["canEdit"] &= p.editor
@@ -234,7 +240,7 @@ def graph_data(state, p, as_of, currency):
             as_of,
             DB.get_setting("model", {}).get("executiveIDs", []),
         )
-        allow = p.finance or (p.role == "owner" and k == p.unit and active_count >= 5)
+        allow = p.finance or (p.role == "owner" and k == p.unit and active_count >= 5 and entity == "both")
         metric["total"] = safe_metric(metric["total"], allow)
         metric["direct"] = safe_metric(metric["direct"], p.finance)
         if not allow:
@@ -282,7 +288,7 @@ def graph_data(state, p, as_of, currency):
 
 @app.get("/api/organization")
 def organization(
-    as_of: str | None = None, currency: str = "USD", p: Principal = Depends(principal)
+    as_of: str | None = None, currency: str = "USD", entity: str = "both", p: Principal = Depends(principal)
 ):
     as_of = as_of or date.today().isoformat()
     try:
@@ -297,9 +303,12 @@ def organization(
             403, "Owner aggregates are available only for the current date in USD"
         )
     state, v = DB.read()
-    result = graph_data(state, p, as_of, currency)
+    if entity not in {"both", "divergent", "czinger"}:
+        raise HTTPException(400, "Choose Both, Divergent, or Czinger Vehicles")
+    result = graph_data(state, p, as_of, currency, entity)
     result.update(
         version=v,
+        entity=entity,
         asOf=as_of,
         currency=currency,
         synthetic=DB.get_setting("synthetic", False),
@@ -357,9 +366,15 @@ def create_preview(content, filename, mapping, mode, p, synthetic=False, restore
     incoming, parse_errors, headers, warnings = parse_workbook(content, mapping)
     current, v = DB.read()
     # A restored older snapshot must not overwrite any app-owned records.
-    merged, changes, conflicts = merge_import(
-        current, incoming, mode, p.id, deleted_units=DB.get_setting("deleted_units", [])
-    )
+    if "Org Structure" in headers:
+        merged, changes, conflicts, parse_errors, warnings = organizer_import(
+            content, current, p.id, DB.get_setting("deleted_units", [])
+        )
+        mode = "incremental"
+    else:
+        merged, changes, conflicts = merge_import(
+            current, incoming, mode, p.id, deleted_units=DB.get_setting("deleted_units", [])
+        )
     if mode == "snapshot" and not incoming["Employees"]:
         parse_errors.append(
             {
@@ -685,7 +700,7 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
         if not parent or (
             parent["OrgUnitID"] not in units
             and state["OrganizationalUnits"][parent["OrgUnitID"]]["UnitType"]
-            != "company"
+            not in {"company", "corporate"}
         ):
             raise HTTPException(403, "Parent objective outside your scope")
     if sheet == "Budgets" and p.role == "owner":
@@ -734,7 +749,7 @@ def edit(sheet: str, ident: str, body: Edit, p: Principal = Depends(principal)):
     ):
         target_unit = state["OrganizationalUnits"][record["OrgUnitID"]]
         parent_objective = state["Objectives"].get(record.get("ParentObjectiveID"))
-        if target_unit["UnitType"] == "company":
+        if target_unit["UnitType"] in {"company", "corporate"}:
             if parent_objective:
                 raise HTTPException(
                     422,
@@ -930,6 +945,8 @@ def model_get(p: Principal = Depends(principal)):
 
     state, version = DB.read()
     config = {**default_model(state), **DB.get_setting("model", {})}
+    if any(u.get("UnitType") == "corporate" for u in state["OrganizationalUnits"].values()):
+        config.update(divergentUnit="divergent", czingerUnit="czinger")
     all_allocations = allocation_summaries(
         state,
         date.today().isoformat(),

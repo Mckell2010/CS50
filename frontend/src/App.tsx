@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   GitBranch,
   Users,
@@ -60,6 +60,8 @@ const remembered = () => {
   }
 };
 export default function App() {
+  const requestNumber = useRef(0);
+  const [entity, setEntity] = useState("both");
   const [session, setSession] = useState<Session | null>(null),
     [data, setData] = useState<Organization | null>(null),
     [error, setError] = useState(""),
@@ -72,9 +74,9 @@ export default function App() {
       new Set(),
     ),
     [view, setView] = useState<"people" | "units">(
-      remembered().view || "people",
+      remembered().view || "units",
     ),
-    [selected, setSelected] = useState(remembered().selected || "001"),
+    [selected, setSelected] = useState(remembered().selected || ""),
     [expanded, setExpanded] = useState<Set<string>>(
       new Set(remembered().expanded || []),
     ),
@@ -105,21 +107,24 @@ export default function App() {
     setTimeout(() => setToast(""), 4000);
   };
   const reload = useCallback(async () => {
+    const request = ++requestNumber.current;
     try {
       const s = await api("/session");
       setSession(s);
       const d = await api(
-        `/organization?as_of=${s.role === "owner" ? today() : asOf}&currency=${s.role === "owner" ? "USD" : currency}`,
+        `/organization?as_of=${s.role === "owner" ? today() : asOf}&currency=${s.role === "owner" ? "USD" : currency}&entity=${entity}`,
       );
+      if (request !== requestNumber.current) return;
       setData(d);
       setError("");
       setRootChoice(d.rootEmployee);
       setLoading(false);
     } catch (e) {
+      if (request !== requestNumber.current) return;
       setError((e as Error).message);
       setLoading(false);
     }
-  }, [asOf, currency]);
+  }, [asOf, currency, entity]);
   useEffect(() => {
     reload();
   }, [reload]);
@@ -141,7 +146,7 @@ export default function App() {
     const rows = view === "people" ? data.employees : data.units;
     const key = view === "people" ? "EmployeeID" : "OrgUnitID";
     if (!rows.some((r) => r[key] === selected)) {
-      setSelected("");
+      setSelected(view === "units" ? data.units.find(u => !u.ParentOrgUnitID)?.OrgUnitID || "" : data.employees.find(p => !p.ManagerID)?.EmployeeID || "");
       if (selected)
         notify("The previous selection is no longer available in this scope.");
     }
@@ -261,7 +266,7 @@ export default function App() {
     setFocus("");
     setSelected(
       v === "units"
-        ? unit?.OrgUnitID || data?.units[0]?.OrgUnitID || ""
+        ? rootUnit || data?.units[0]?.OrgUnitID || ""
         : data?.rootEmployee || "",
     );
     setExpanded(new Set());
@@ -345,7 +350,7 @@ export default function App() {
         AllocationPercent:
           parentShare !== ""
             ? parentShare
-            : u.UnitType !== "company" && existing && parent?.metrics.envelope
+            : !["company", "corporate"].includes(u.UnitType) && existing && parent?.metrics.envelope
               ? percent(u.metrics.envelope || 0, parent.metrics.envelope)
               : "",
         DirectPercent:
@@ -384,8 +389,9 @@ export default function App() {
         OrgUnitID: uid("unit"),
         OrgUnitName: "",
         ParentOrgUnitID: unit?.OrgUnitID || session?.unit || rootUnit,
-        UnitType: "subdepartment",
-        OwnerEmployeeID: "",
+        UnitType: ["corporate", "function", "group", "department", "team"][(unitTier(unit || ({UnitType:"corporate"} as Unit)) ?? 0) + 1] || "subteam",
+        Tier: String((unitTier(unit || ({UnitType:"corporate"} as Unit)) ?? 0) + 1),
+        OwnerEmployeeID: "", DepartmentOwner:"", DepartmentPurpose:"", Entity:"both",
       },
     });
   const newKR = (obj: RecordData) =>
@@ -575,7 +581,7 @@ export default function App() {
   const parentObjectivesFor = (u: Unit) =>
     u.ParentOrgUnitID
       ? objectivesFor(u.ParentOrgUnitID)
-      : u.UnitType === "company"
+      : ["company", "corporate"].includes(u.UnitType)
         ? []
         : data.objectives.filter((o) => o.readOnly);
   const toggleBudget = (id: string) =>
@@ -590,6 +596,7 @@ export default function App() {
         ? u.Tier
         : (
             {
+              corporate: 0,
               company: 0,
               function: 1,
               group: 2,
@@ -608,6 +615,7 @@ export default function App() {
       : roots.reduce((sum, u) => sum + (u.metrics.envelope || 0), 0);
   const summary = data.summary;
   const unitBreakdown = [
+    ["corporate", "Corporate", "Corporate"],
     ["company", "company", "companies"],
     ["function", "function", "functions"],
     ["group", "group", "groups"],
@@ -625,7 +633,7 @@ export default function App() {
     .filter(
       ({ type, count }) =>
         count > 0 ||
-        ["company", "function", "department", "team"].includes(type),
+        ["function", "department", "team"].includes(type),
     )
     .map(
       ({ count, singular, plural }) =>
@@ -895,6 +903,7 @@ export default function App() {
               Scope: <strong>{summary.scope}</strong>
             </span>
             <div>
+              <label>Entity <select aria-label="Entity filter" value={entity} onChange={e => setEntity(e.target.value)}><option value="both">Both</option><option value="divergent">Divergent</option><option value="czinger">Czinger Vehicles</option></select></label>
               <label>
                 As of{" "}
                 <input
@@ -927,6 +936,7 @@ export default function App() {
               </select>
             </div>
           </div>
+          {entity !== "both" && <p className="notice">People and payroll reflect the selected employing company. Corporate budgets and manager team-allocation percentages still cover both entities. Other-company managers are skipped in this view only; reporting records stay unchanged.</p>}
           <section className="stats-grid">
             <div className="stat-card" aria-label="People summary">
               <span>
@@ -1270,6 +1280,7 @@ export default function App() {
                             {unit?.OrgUnitName}
                           </span>
                         </div>
+                        {view === "units" && unit?.DepartmentPurpose && <p className="notice">{unit.DepartmentPurpose}</p>}
                         <div className="profile-facts">
                           {view === "people" ? (
                             <>
@@ -1293,7 +1304,7 @@ export default function App() {
                                 Owner:{" "}
                                 {data.employees.find(
                                   (e) => e.EmployeeID === unit!.OwnerEmployeeID,
-                                )?.Name || "Unassigned / outside scope"}
+                                )?.Name || unit!.DepartmentOwner || "Unassigned / outside scope"}
                               </span>
                               {unit!.DepartmentCode && (
                                 <span>
@@ -1537,7 +1548,7 @@ export default function App() {
                               </button>
                               <button onClick={newUnit}>
                                 <Plus size={12} />
-                                Subdepartment
+                                Add child tier
                               </button>
                             </div>
                           )}
@@ -1622,7 +1633,7 @@ export default function App() {
                   <h2>Payroll budgets by tier</h2>
                   <p>
                     {asOf.slice(0, 4)} calendar year · {currency} · envelopes
-                    include descendants. Set company budgets first, then
+                    include descendants. Set Corporate budgets first, then
                     allocate each lower tier.
                   </p>
                 </div>
@@ -1654,20 +1665,20 @@ export default function App() {
                   {session.canViewCompensation && (
                     <div className="company-budget-grid">
                       {roots
-                        .filter((u) => u.UnitType === "company")
+                        .filter((u) => !u.ParentOrgUnitID)
                         .map((u) => (
                           <article
                             className="company-budget-card"
                             key={u.OrgUnitID}
                           >
                             <span className="budget-tier">
-                              Tier 0 · Company payroll budget
+                              Tier 0 · Corporate payroll budget
                             </span>
                             <h3>{u.OrgUnitName}</h3>
                             <strong className="company-budget-amount">
                               {u.metrics.budget
                                 ? money(u.metrics.envelope, currency)
-                                : "Set company budget first"}
+                                : "Set Corporate budget first"}
                             </strong>
                             <p>
                               {asOf.slice(0, 4)} · {currency} · Covers all
@@ -1796,7 +1807,7 @@ export default function App() {
                                 )}
                             </td>
                             <td>
-                              {u.UnitType === "company" ||
+                              {["company", "corporate"].includes(u.UnitType) ||
                               !u.ParentOrgUnitID ? (
                                 "—"
                               ) : !u.metrics.budget ? (
@@ -1923,7 +1934,7 @@ export default function App() {
                 <div>
                   <h2>Objectives & key results by tier</h2>
                   <p>
-                    Set company objectives first, then connect each lower tier
+                    Set Corporate objectives first, then connect each lower tier
                     to the parent objective it supports. Key results keep their
                     own measures.
                   </p>
@@ -2000,13 +2011,13 @@ export default function App() {
                           className="secondary"
                           aria-label={`Add objective for ${u.OrgUnitName}`}
                           disabled={
-                            u.UnitType !== "company" &&
+                            !["company", "corporate"].includes(u.UnitType) &&
                             !parentObjectivesFor(u).length
                           }
                           onClick={() => newObjective(u.OrgUnitID)}
                         >
                           <Plus size={14} />
-                          {u.UnitType === "company"
+                          {["company", "corporate"].includes(u.UnitType)
                             ? "Add company objective"
                             : "Add aligned objective"}
                         </button>
@@ -2020,7 +2031,7 @@ export default function App() {
                       </div>
                     ) : (
                       <p className="okr-tier-empty">
-                        {u.UnitType === "company"
+                        {["company", "corporate"].includes(u.UnitType)
                           ? "Start with this company’s objectives, then add measurable key results."
                           : parentObjectivesFor(u).length
                             ? "Add objectives that support the parent tier, then define key results."

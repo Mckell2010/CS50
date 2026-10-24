@@ -11,6 +11,8 @@ def default_model(state):
         for u in state["OrganizationalUnits"].values()
         if u.get("UnitType") == "company"
     ]
+    if any(u.get("UnitType") == "corporate" for u in state["OrganizationalUnits"].values()):
+        companies = ["divergent", "czinger"]
     return dict(
         includeContractors=True,
         scope="company-functions",
@@ -36,10 +38,12 @@ def validate_model(state, config):
         )
     if not isinstance(config["includeContractors"], bool):
         raise ValueError("Contractor participation must be true or false")
+    corporate = any(u.get("UnitType") == "corporate" for u in state["OrganizationalUnits"].values())
     for field in ["divergentUnit", "czingerUnit"]:
         key = config[field]
         if (
             key
+            and not (corporate and key in {"divergent", "czinger"})
             and state["OrganizationalUnits"].get(key, {}).get("UnitType") != "company"
         ):
             raise ValueError("Select company-level organizational units")
@@ -70,7 +74,8 @@ def validate_model(state, config):
 def overhead_preview(state, config, as_of, currency):
     units = state["OrganizationalUnits"]
     people = state["Employees"]
-    companies = [config["divergentUnit"], config["czingerUnit"]]
+    corporate = any(u.get("UnitType") == "corporate" for u in units.values())
+    companies = ["divergent", "czinger"] if corporate else [config["divergentUnit"], config["czingerUnit"]]
 
     def ancestry(unit):
         function = ""
@@ -80,6 +85,8 @@ def overhead_preview(state, config, as_of, currency):
             row = units[unit]
             if row.get("UnitType") == "function":
                 function = unit
+            if row.get("UnitType") == "corporate":
+                return "corporate", function
             if row.get("UnitType") == "company":
                 return unit, function
             unit = row.get("ParentOrgUnitID")
@@ -90,14 +97,14 @@ def overhead_preview(state, config, as_of, currency):
         if not company:
             continue
         for key, u in units.items():
-            if u.get("UnitType") == "function" and ancestry(key)[0] == company:
+            if u.get("UnitType") == "function" and (corporate or ancestry(key)[0] == company):
                 weights[(company, key)] = Decimal(0)
         weights[(company, "")] = Decimal(0)
     department_weights = {}
     for company in companies:
         if company:
             for key, unit in units.items():
-                if unit.get("UnitType") == "department" and ancestry(key)[0] == company:
+                if unit.get("UnitType") == "department" and (corporate or ancestry(key)[0] == company):
                     department_weights[(company, key)] = Decimal(0)
             department_weights[(company, "")] = Decimal(0)
 
@@ -137,10 +144,10 @@ def overhead_preview(state, config, as_of, currency):
         home, function = ancestry(person["OrgUnitID"])
         for company, fraction in zip(companies, [percent, 1 - percent]):
             if company:
-                bucket = (company, function if home == company else "")
+                bucket = (company, function if (corporate or home == company) else "")
                 weights[bucket] = weights.get(bucket, Decimal(0)) + weight * fraction
                 department = (
-                    department_of(person["OrgUnitID"]) if home == company else ""
+                    department_of(person["OrgUnitID"]) if (corporate or home == company) else ""
                 )
                 bucket = (company, department)
                 department_weights[bucket] = (
@@ -188,7 +195,7 @@ def overhead_preview(state, config, as_of, currency):
                 result.append(
                     dict(
                         companyID=c,
-                        companyName=units[c]["OrgUnitName"],
+                        companyName=({"divergent": "Divergent", "czinger": "Czinger Vehicles"}[c] if corporate else units[c]["OrgUnitName"]),
                         functionID=unit,
                         functionName=(
                             units[unit]["OrgUnitName"] if unit else f"Unmapped {level}"

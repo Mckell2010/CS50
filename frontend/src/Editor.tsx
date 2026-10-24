@@ -45,6 +45,9 @@ export const FIELDS: Record<string, string[]> = {
     "OwnerEmployeeID",
     "Tier",
     "DepartmentCode",
+    "DepartmentOwner",
+    "DepartmentPurpose",
+    "Entity",
   ],
   Budgets: [
     "BudgetID",
@@ -114,7 +117,7 @@ export default function Editor({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState<RecordData>(record),
+  const [form, setForm] = useState<RecordData>(sheet === "Employees" ? {...record, ManagerID: record.StoredManagerID ?? record.ManagerID} : record),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const budgetUnit = data.units.find((u) => u.OrgUnitID === form.OrgUnitID);
@@ -205,7 +208,7 @@ export default function Editor({
               <p>
                 {isChildBudget
                   ? "Set the percentage of the immediate parent budget. The resulting dollars and percentage-based descendants update when the parent changes."
-                  : "Set the company payroll budget in dollars. Lower tiers receive percentages of their immediate parent."}
+                  : "Set the Corporate payroll budget in dollars. Lower tiers receive percentages of their immediate parent."}
               </p>
               {isChildBudget && (
                 <p>
@@ -329,7 +332,7 @@ export default function Editor({
                       o.ObjectiveID === form.ParentObjectiveID ||
                       (unit?.ParentOrgUnitID
                         ? o.OrgUnitID === unit.ParentOrgUnitID
-                        : unit?.UnitType !== "company" && o.readOnly)
+                        : !["company", "corporate"].includes(unit?.UnitType || "") && o.readOnly)
                     );
                   })
                   .map((o) => ({
@@ -343,6 +346,7 @@ export default function Editor({
                 }));
               if (field === "UnitType")
                 options = [
+                  "corporate",
                   "company",
                   "function",
                   "group",
@@ -374,11 +378,15 @@ export default function Editor({
                   value,
                   label: value,
                 }));
+              if (field === "Entity")
+                options = [{value:"both",label:"Both"},{value:"divergent",label:"Divergent"},{value:"czinger",label:"Czinger Vehicles"}];
               if (field === "SourceCompany")
                 options = ["divergent", "czinger"].map((value) => ({
                   value,
                   label: value,
                 }));
+              if (options && form[field] && !options.some(o => o.value === form[field]))
+                options.push({value: form[field], label: `${form[field]} (outside selected view)`});
               if (field === "Status")
                 options = [
                   "on-track",
@@ -421,6 +429,8 @@ export default function Editor({
                   setForm((f) => ({
                     ...f,
                     [field]: e.target.value,
+                    ...(field === "DepartmentOwner" ? {OwnerEmployeeID: ""} : {}),
+                    ...(field === "OwnerEmployeeID" && sheet === "OrganizationalUnits" ? {DepartmentOwner: data.employees.find(p => p.EmployeeID === e.target.value)?.Name || ""} : {}),
                     ...(field === "EmploymentType"
                       ? { ExemptionStatus: "" }
                       : {}),
@@ -429,6 +439,7 @@ export default function Editor({
                           Tier: String(
                             (
                               {
+                                corporate: 0,
                                 company: 0,
                                 function: 1,
                                 group: 2,
@@ -495,8 +506,8 @@ export default function Editor({
                         </option>
                       ))}
                     </select>
-                  ) : field === "ObjectiveText" ? (
-                    <textarea {...props} required rows={3} />
+                  ) : ["ObjectiveText", "DepartmentPurpose"].includes(field) ? (
+                    <textarea {...props} required={field === "ObjectiveText"} rows={3} />
                   ) : (
                     <input
                       {...props}
@@ -572,7 +583,7 @@ export default function Editor({
           </div>
           {sheet === "OrganizationalUnits" && (
             <p className="fine-print">
-              Tier 0: company · 1: function · 2: group · 3: department · 4: team
+              Tier 0: Corporate · 1: function · 2: group · 3: department · 4: team
               · 5+: subteam. Leave Tier blank for existing units awaiting
               classification. Department codes are text and may repeat across
               companies.

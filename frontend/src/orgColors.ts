@@ -7,7 +7,7 @@ export type ColorUnit = {
   Tier?: string | number;
 };
 export const tierNames: Record<number, string> = {
-  0: "Company",
+  0: "Corporate",
   1: "Function",
   2: "Group",
   3: "Department",
@@ -21,6 +21,7 @@ export function unitTier(unit: ColorUnit): number | undefined {
   }
   return (
     {
+      corporate: 0,
       company: 0,
       function: 1,
       group: 2,

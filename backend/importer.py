@@ -16,6 +16,11 @@ def parse_workbook(content, mapping=None):
         wb = load_workbook(BytesIO(content), read_only=True, data_only=False)
     except (zipfile.BadZipFile, KeyError, ValueError) as e:
         raise ValueError(f"Invalid .xlsx workbook: {e}")
+    if "Org Structure" in wb.sheetnames:
+        wb.close()
+        from backend.organizer import organizer_import
+        state, _, _, errors, warnings = organizer_import(content, empty_state(), "import")
+        return state, errors, {"Org Structure": []}, warnings
     if "Employees" not in wb.sheetnames:
         from backend.chart_import import chart_export, parse_chart
 

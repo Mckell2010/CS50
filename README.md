@@ -76,3 +76,13 @@ See [validation results](docs/validation.md) for observed checks and practical l
 - [Company allocation database upgrade](migrations/002_company_allocations.postgresql.sql)
 
 The local app works without corporate credentials. Entra and Graph adapters require actual tenant configuration and permissions before live validation. A Dockerfile is supplied; no cloud resource, domain, public deployment, or production database is provisioned by this repository.
+
+### Corporate structure and entity views
+
+The **Org Chart Organizer** format is supported by **Import workbook**. Its `Org Structure` sheet uses Department ID, Parent ID, Department Title, Department Owner, Department Purpose and Tier. The import creates one Corporate root, retains leading-zero IDs, and derives missing tier values from parent links. Review the preview and then apply it atomically.
+
+The optional `Position Control` sheet matches **existing** people by unique `Unique Company ID`. Exact new Department IDs update assignments; Company supplies the employing entity (DTI/DII → Divergent, CZV → Czinger). This structure import does not refresh employment status, add positions, or replace reporting lines. Blank/old codes and unmatched IDs are not guessed. Existing assignments remain under **Assignments to review**; app-owned edits, compensation, budgets and objectives are preserved. On an empty database, this workbook initializes the structure only.
+
+Use **Entity → Both / Divergent / Czinger Vehicles** to filter people and payroll by employing company. It does not split or duplicate the Corporate hierarchy. Units default to Both; set a dedicated unit's Entity in its editor or table. Structural ancestors remain visible. Budget envelopes and calculated manager team allocations retain their full scope and are labeled accordingly. Filtered financial aggregates remain restricted for scoped owners to prevent disclosure by comparison.
+
+In **Org structure**, switch between **Viewer** and **Table**. Edit and save a table row to change the title, parent, owner, purpose, tier or entity. The chart, structure tree and planning pages reload from the same saved records. IDs remain stable; move a unit by changing its parent. The table hides previous assignments by default; enable **Include previous assignments awaiting new department IDs** to review them. Edit a person in Model settings or use Assign people in the structure viewer to finish mapping the roster. Updates use version checks, so a stale edit cannot overwrite a newer save.

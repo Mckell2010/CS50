@@ -140,7 +140,7 @@ export default function ImportPanel({
           <div>
             <span className="eyebrow">YOUR SOURCE OF TRUTH</span>
             <h2 id="import-title">Bring your organization to life</h2>
-            <p>One workbook. A connected view of your people and plans.</p>
+            <p>Import Org Chart Organizer (Org Structure + Position Control), or the standard workbook. Preview changes before applying.</p>
           </div>
           <button
             className="icon-button"
@@ -320,7 +320,7 @@ export default function ImportPanel({
                       <fieldset key={sheet}>
                         <legend>{sheet}</legend>
                         <div className="mapping-grid">
-                          {preview.columns[sheet].map((field: string) => (
+                          {(preview.columns[sheet] || []).map((field: string) => (
                             <label key={field}>
                               {field}
                               <select

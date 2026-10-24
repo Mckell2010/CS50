@@ -3247,3 +3247,23 @@ dt {
     min-width: 0;
   }
 }
+
+.structure-table { min-width: 1150px; width: 100%; }
+.structure-table td { vertical-align: top; min-width: 110px; }
+.structure-table th:nth-child(3), .structure-table th:nth-child(5) { min-width: 190px; }
+.structure-table input, .structure-table select, .structure-table textarea { width: 100%; min-width: 100px; padding: 8px; border: 1px solid #aaa; background: white; color: #151515; }
+.structure-table textarea { min-height: 85px; resize: vertical; }
+.structure-table input[type=number] { min-width: 60px; width: 65px; }
+.structure-toolbar .view-tabs button[aria-pressed=true] { background: #151515; color: white; }
+.scope-line label select { padding: 7px; }
+.structure-table { table-layout: fixed; }
+.structure-table th, .structure-table td { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.structure-table th:nth-child(1), .structure-table th:nth-child(2) { width: 9%; }
+.structure-table th:nth-child(3) { width: 17%; }
+.structure-table th:nth-child(4) { width: 14%; }
+.structure-table th:nth-child(5) { width: 19%; }
+.structure-table th:nth-child(6) { width: 5%; }
+.structure-table th:nth-child(7) { width: 12%; }
+.structure-table th:nth-child(8) { width: 15%; }
+.structure-table .inline-actions { flex-wrap: wrap; }
+.review-toggle { display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 12px; }

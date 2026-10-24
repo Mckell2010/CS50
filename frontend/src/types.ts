@@ -66,6 +66,7 @@ export type Session = {
   canViewCompensation: boolean;
 };
 export type Organization = {
+  entity?: string;
   demoNotes?: string[];
   employees: Person[];
   units: Unit[];

@@ -44,6 +44,7 @@ export default function ModelPage({
               .toLowerCase()
               .includes(query.toLowerCase())) &&
           (!company || e.SourceCompany === company) &&
+          (!data.entity || data.entity === "both" || e.SourceCompany === data.entity) &&
           (kind === "all" ||
             (kind === "contributors"
               ? e.companyAllocation.canEdit
@@ -54,7 +55,7 @@ export default function ModelPage({
   useEffect(() => {
     setPage(0);
     setSelected(new Set());
-  }, [query, company, kind]);
+  }, [query, company, kind, data.entity]);
   const run = async (fn: () => Promise<void>) => {
     setError("");
     setBusy(true);
@@ -77,7 +78,8 @@ export default function ModelPage({
   if (!model) return <p>{error || "Loading model settings…"}</p>;
   const config = model.config,
     preview = model.preview;
-  const companies = data.units.filter((u) => u.UnitType === "company");
+  const corporate = data.units.some(u => u.UnitType === "corporate");
+  const companies = corporate ? [{OrgUnitID:"divergent",OrgUnitName:"Divergent"},{OrgUnitID:"czinger",OrgUnitName:"Czinger Vehicles"}] : data.units.filter((u) => u.UnitType === "company");
   const filled = (model.people as typeof data.employees).filter(
     (e) => !["vacant", "draft"].includes(e.EmploymentStatus),
   );
@@ -106,7 +108,7 @@ export default function ModelPage({
                 JobTitle: "",
                 ManagerID: "",
                 OrgUnitID:
-                  config.divergentUnit || data.units[0]?.OrgUnitID || "",
+                  data.units.find(u => !u.ParentOrgUnitID)?.OrgUnitID || "",
                 EmploymentStatus: "draft",
                 FTE: "",
                 StartDate: "",
@@ -317,12 +319,13 @@ export default function ModelPage({
         <p className="fine-print">
           Shares are attributed across functions within each company. They never
           change direct department costs, payroll, or consolidated totals. USD
-          annual run rate, using today’s roster.
+          annual run rate, using today’s full roster across both entities.
         </p>
         <div className="editor-grid">
           <label>
             Divergent company
             <select
+              disabled={corporate}
               value={config.divergentUnit}
               onChange={(e) => change("divergentUnit", e.target.value)}
             >
@@ -337,6 +340,7 @@ export default function ModelPage({
           <label>
             Czinger company
             <select
+              disabled={corporate}
               value={config.czingerUnit}
               onChange={(e) => change("czingerUnit", e.target.value)}
             >

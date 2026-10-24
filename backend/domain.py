@@ -15,6 +15,9 @@ COLUMNS = {
         "OwnerEmployeeID",
         "Tier",
         "DepartmentCode",
+        "DepartmentOwner",
+        "DepartmentPurpose",
+        "Entity",
     ],
     "Employees": [
         "EmployeeID",
@@ -452,6 +455,7 @@ def validate(state):
                     "Use active, leave, inactive, vacant, or draft",
                 )
             if sheet == "OrganizationalUnits" and row.get("UnitType") not in {
+                "corporate",
                 "company",
                 "function",
                 "group",
@@ -466,12 +470,15 @@ def validate(state):
                     "UnitType",
                     "Use company, function, group, department, team, subteam, or subdepartment",
                 )
+            if sheet == "OrganizationalUnits" and row.get("Entity", "") not in {"", "both", "divergent", "czinger"}:
+                err(sheet, row, "Entity", "Choose both, divergent, or czinger")
             if sheet == "OrganizationalUnits" and row.get("Tier", "") != "":
                 try:
                     tier = number(row["Tier"])
                     if tier < 0 or tier != int(tier):
                         raise ValueError()
                     expected = {
+                        "corporate": 0,
                         "company": 0,
                         "function": 1,
                         "group": 2,

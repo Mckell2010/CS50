@@ -9,6 +9,7 @@ import {
   type RecordData,
 } from "./types";
 import { unitTier, tierName } from "./orgColors";
+import StructureTable from "./StructureTable";
 
 export default function StructurePage({
   data,
@@ -25,7 +26,9 @@ export default function StructurePage({
   onBudget: (unit: Unit) => void;
   onView: (id: string) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(["organizer-review"]));
+  const [format, setFormat] = useState("viewer");
+  const [includeReview, setIncludeReview] = useState(false);
   const [query, setQuery] = useState("");
   const [deleting, setDeleting] = useState<Unit | null>(null);
   const [promote, setPromote] = useState(false);
@@ -34,6 +37,14 @@ export default function StructurePage({
   const [assigning, setAssigning] = useState("");
   const [personQuery, setPersonQuery] = useState("");
   const byId = new Map(data.units.map((u) => [u.OrgUnitID, u]));
+  const reviewUnit = (id: string) => {
+    const seen = new Set<string>();
+    while (id && !seen.has(id)) {
+      if (id === "organizer-review") return true;
+      seen.add(id); id = byId.get(id)?.ParentOrgUnitID || "";
+    }
+    return false;
+  };
   const children = (id: string) =>
     data.units
       .filter((u) => u.ParentOrgUnitID === id)
@@ -57,7 +68,7 @@ export default function StructurePage({
   const add = (parent?: Unit) => {
     const tier = parent ? (unitTier(parent) ?? 0) + 1 : 0;
     const kind =
-      ["company", "function", "group", "department", "team"][tier] || "subteam";
+      ["corporate", "function", "group", "department", "team"][tier] || "subteam";
     onEdit("OrganizationalUnits", {
       OrgUnitID: "unit-" + crypto.randomUUID().slice(0, 8),
       OrgUnitName: "",
@@ -66,6 +77,7 @@ export default function StructurePage({
       UnitType: kind,
       DepartmentCode: "",
       OwnerEmployeeID: "",
+      DepartmentOwner: "", DepartmentPurpose: "", Entity: "both",
     });
   };
   const remove = async () => {
@@ -134,8 +146,9 @@ export default function StructurePage({
                 {unit.DepartmentCode
                   ? `Department ${unit.DepartmentCode}`
                   : "No department code"}{" "}
-                · {owner?.Name || "Owner unassigned"}
+                · {unit.DepartmentOwner || owner?.Name || "Owner unassigned"}
               </p>
+              {unit.DepartmentPurpose && <p>{unit.DepartmentPurpose}</p>}
             </div>
           </div>
           <div className="structure-metrics">
@@ -214,12 +227,16 @@ export default function StructurePage({
   return (
     <section className="structure-page">
       <p className="notice">
-        Create the company → function → group → department → team hierarchy,
+        Create the Corporate → function → group → department → team hierarchy,
         then add as many subtiers as needed. Budgets and OKRs follow this
         structure. Reporting lines are separate; department codes stay attached
         to their units.
       </p>
       <div className="structure-toolbar">
+        <div className="view-tabs" aria-label="Structure format">
+          <button aria-pressed={format === "viewer"} onClick={() => setFormat("viewer")}>Viewer</button>
+          <button aria-pressed={format === "table"} onClick={() => setFormat("table")}>Table</button>
+        </div>
         <input
           aria-label="Search organizational structure"
           placeholder="Find a unit or department code"
@@ -240,7 +257,7 @@ export default function StructurePage({
         {session.canViewCompensation && (
           <button className="primary" onClick={() => add()}>
             <Plus size={14} />
-            Add company / Tier 0
+            Add Corporate / Tier 0
           </button>
         )}
       </div>
@@ -325,15 +342,16 @@ export default function StructurePage({
           </button>
         </section>
       )}
-      <div className="structure-tree">
+      {format === "table" && data.units.some(u => u.OrgUnitID === "organizer-review") && <label className="review-toggle"><input type="checkbox" checked={includeReview} onChange={e => setIncludeReview(e.target.checked)} /> Include previous assignments awaiting new department IDs</label>}
+      {format === "table" ? <StructureTable data={data} session={session} units={data.units.filter(u => matches.has(u.OrgUnitID) && (includeReview || !reviewUnit(u.OrgUnitID))).sort((a,b) => (a.DepartmentCode || a.OrgUnitID).localeCompare(b.DepartmentCode || b.OrgUnitID))} onSaved={onSaved} onView={onView} /> : <div className="structure-tree">
         {data.units
           .filter((u) => !byId.has(u.ParentOrgUnitID))
           .sort((a, b) => a.OrgUnitName.localeCompare(b.OrgUnitName))
           .map((u) => row(u, 0))}
-      </div>
+      </div>}
       {!matches.size && (
         <p className="notice">
-          No matching units. Add a company to begin a new structure.
+          No matching units. Add Corporate to begin a new structure.
         </p>
       )}
     </section>
