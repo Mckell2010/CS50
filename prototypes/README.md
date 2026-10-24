@@ -4,6 +4,8 @@ Open `org-chart.html` in a current Microsoft Edge or Google Chrome browser. No i
 
 Click **Open Excel workbook** and select **Org Chart Organizer.xlsx**. Only the **Org Structure** sheet is displayed. The file is processed locally; this page makes no network requests and does not save your workbook or changes.
 
+- The left **Org Structure** sidebar follows the workbook’s **Department ID / Parent ID** hierarchy. Its expand/collapse controls are independent of the chart.
+- Each card shows **Department code** (the workbook’s Department ID) and **Department owner**. Blank owners display **Not assigned**. The selection bar shows the complete ancestor code path, preserving leading zeros.
 - **+ / −** on a card expands or collapses its children to the right.
 - Drag the background to pan; scroll or use the zoom buttons to zoom.
 - Select a card and choose **Focus branch** to keep its ancestors and descendants visible. **Whole organization** restores other branches.
