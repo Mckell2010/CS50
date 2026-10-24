@@ -6,11 +6,11 @@ import { runInNewContext } from 'node:vm';
 // Exercise the exact offline HTML implementation with synthetic records only.
 const html = readFileSync(new URL('../prototypes/org-chart.html', import.meta.url), 'utf8');
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end));
-const { buildHeadcounts } = runInNewContext(
+const { buildHeadcounts, buildReports, filterHeadcounts, visibleCompanyUnits } = runInNewContext(
   section('function departmentCode(', 'function setStatus(') +
   section('function buildHeadcounts(', 'function updatePeopleSummary(') +
   section('function suggestDepartment(', 'function unitIcon(') +
-  ';({buildHeadcounts});'
+  ';({buildHeadcounts, buildReports, filterHeadcounts, visibleCompanyUnits});'
 );
 const unit = (id, parent, name = id, code = id) => ({ id, parent, name, code });
 const person = (n, department, extra = {}) => ({
@@ -96,4 +96,70 @@ test('turning estimates off and explicitly clearing a reviewed assignment restor
 test('a missing roster is unavailable, not a zero-person organization', () => {
   const result = buildHeadcounts([unit('root', '')]);
   assert.equal(result.available, false);
+});
+
+test('open roles split filled from approved/unfilled without including active, held, gated, pending, or inactive positions', () => {
+  const units = [unit('root', '')];
+  const rows = [
+    person(1, 'root'),
+    person(2, 'root', { status: 'Filled' }),
+    person(3, 'root', { status: 'Approved', name: '' }),
+    person(4, 'root', { status: 'Approved - Hide', name: '' }),
+    person(5, 'root', { status: 'Approved-2026 Intern Conversion ONLY' }),
+    person(6, 'root', { status: 'HOLD - Approved' }),
+    person(7, 'root', { status: 'GATED' }),
+    person(8, 'root', { status: 'PENDING' }),
+    person(9, 'root', { status: 'Inactive' }),
+    person(10, 'root', { status: 'Approved', stage: 'Offer accepted' }),
+    person(1, 'root', { status: 'Filled' }),
+  ];
+  const report = buildReports(units, roster(rows), { suggest: false });
+  assert.equal(report.people.length, 1);
+  assert.equal(report.pipeline.people.length, 5);
+  assert.equal(report.pipeline.people.filter(r => r.pipelineStatus === 'filled').length, 2);
+  assert.equal(report.pipeline.people.filter(r => r.pipelineStatus === 'sourcing').length, 3);
+  assert.equal(report.pipeline.held.length, 3);
+  assert.equal(report.pipeline.counts.get('root').all.length, 5);
+  assert.ok(report.notes.some(note => note.includes('Active record')));
+});
+
+test('pipeline rollups retain direct roles and deduplicate repeated Position IDs', () => {
+  const units = [unit('root', ''), unit('child', 'root')];
+  const report = buildReports(units, roster([
+    person(1, 'root', { status: 'Filled' }),
+    person(2, 'child', { status: 'Approved', name: '' }),
+    person(2, 'child', { status: 'Approved', name: '' }),
+  ]), { suggest: false });
+  assert.equal(report.pipeline.counts.get('root').direct.length, 1);
+  assert.equal(report.pipeline.counts.get('root').all.length, 2);
+  assert.equal(report.pipeline.counts.get('child').all.length, 1);
+  assert.throws(() => buildReports(units, roster([
+    person(3, 'child', { status: 'Filled' }), person(3, 'child', { status: 'Approved' }),
+  ]), { suggest: false }), /conflicting Filled/);
+});
+
+test('employing-company filters reconcile active and open totals and keep required ancestors', () => {
+  const units = [
+    unit('root', '', 'Corporation'), unit('brand', 'root', 'Czinger Sales, Brand and Marketing'),
+    unit('div-brand', 'brand', 'Divergent Brand & Marketing'),
+    unit('cz-brand', 'brand', 'CZV Brand & Marketing'),
+  ];
+  const report = buildReports(units, roster([
+    person(1, 'div-brand', { company: 'DTI' }),
+    person(2, 'div-brand', { company: 'DII' }),
+    person(3, 'cz-brand', { company: 'CZV' }),
+    person(4, 'cz-brand', { company: 'CZV', status: 'Filled' }),
+    person(5, 'div-brand', { company: 'DTI', status: 'Approved', name: '' }),
+  ]), { suggest: false });
+  const divergent = filterHeadcounts(report, units, new Set(['divergent']));
+  const czinger = filterHeadcounts(report, units, new Set(['czinger']));
+  assert.equal(divergent.people.length, 2);
+  assert.equal(czinger.people.length, 1);
+  assert.equal(divergent.pipeline.people.length, 1);
+  assert.equal(czinger.pipeline.people.length, 1);
+  assert.equal(divergent.counts.get('root').all.length + czinger.counts.get('root').all.length, report.counts.get('root').all.length);
+  const visible = visibleCompanyUnits(units, report, divergent, new Set(['divergent']));
+  assert.ok(visible.has('brand')); // Structural ancestor of the Divergent brand team.
+  assert.ok(visible.has('div-brand'));
+  assert.equal(visible.has('cz-brand'), false);
 });
