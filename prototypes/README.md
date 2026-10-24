@@ -79,3 +79,22 @@ Public job postings were inaccessible from the development environment (HTTP 403
 ## Selection focus in both viewers
 
 Click a card to make it larger. Its ancestors and descendants keep their normal detail, while unrelated cards—including peers in the same tier—become compact summaries. Hierarchy, counts, budgets and company filtering do not change. Compact cards show the unit, owner, code and a headcount or payroll summary, and can still be expanded or selected. Curved lines attach to their resized edges. Click the selected card again or **Clear selection** to restore equal-sized cards. Enter/Space on a card supports the same selection toggle. **Focus branch** remains a separate option to hide unrelated branches entirely.
+
+
+## Reporting Structure tab
+
+The final **Reporting Structure** tab uses **Direct Manager** from Position Control to draw a separate, left-to-right people hierarchy. It does not treat department ownership or department nesting as a reporting relationship. Person cards show name, title, assigned department, employing company, Active/Filled/Approved status, manager, and direct/descendant headcounts. Open positions have dashed borders and can be hidden with **Open roles**. Historical Inactive and held/gated/pending positions stay excluded.
+
+- **Gray = Divergent; blue = Czinger.** DTI/DII remain grouped as Divergent. Unknown companies use a neutral card.
+- **Department overlay** adds subtle colored halos and matching department label accents with a legend. It is optional and does not rearrange or change reporting lines. Estimated department assignments remain labeled.
+- Search people, titles, manager labels, or department names/codes. Expand/collapse, pan, zoom, and selection emphasis work independently of the organization-unit tree. Selecting a person enlarges their card and keeps ancestors/descendants readable while unrelated cards become compact. Clear selection or click again to reset.
+- The first view centers a visible CEO or top manager at readable zoom. **Fit view** shows the whole tree. Drag to pan large trees.
+- Company filters retain out-of-company managers as faded context wherever needed to preserve reporting chains. These context cards are excluded from the filtered headcounts. Counts include every selected person or open role once, independently of collapsed branches.
+
+**Manager matching and review:** normalized exact names (including Last, First) or explicit `Pos ID:` references connect automatically. A unique common-nickname match is shown as unconfirmed with a dashed connector. Unknown managers, ambiguous duplicate names, conflicting manager entries, self-reporting, and cycles are grouped under **Manager links to review**, without inventing a manager record. Review entries report affected record counts, not unique-manager counts. A named unresolved manager placeholder is not a confirmed person or extra headcount. Blank manager fields remain top-level. If the Direct Manager column is absent, the viewer explains that reporting links are unavailable.
+
+**Review manager links** lets you map each source manager label to the correct active person, or explicitly choose no manager. Changes apply to all records with that label. A choice that creates a reporting cycle is rejected. **Reset** returns the label to source matching. Manager overrides do not change department assignments, payroll, or the source workbook.
+
+**Card images:** built-in graphics are an illustrative **21C badge** and a stylized **printed-part emblem**, not official logos or verified product photographs. Public image sites were inaccessible from the development environment (HTTP 403). Use **Card images** to upload a verified 21C image and a Divergent printed-part image (PNG/JPEG/WebP, up to 5 MB). Images are resized locally and applied to every person card for that company. No employee data or images are uploaded.
+
+**Save reporting settings** keeps manager overrides and uploaded brand images in a local JSON file. Reopen the same workbook, then **Load settings** to restore them. Reloading a workbook resets manager overrides. Settings are separate from payroll scenarios; original workbook contents remain unchanged. No private workbooks, real employee photos, uploaded product images, or reporting settings are included in the public ZIP.
