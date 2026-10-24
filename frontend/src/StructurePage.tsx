@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Download } from "lucide-react";
 import {
   api,
   money,
@@ -10,6 +10,7 @@ import {
 } from "./types";
 import { unitTier, tierName } from "./orgColors";
 import StructureTable from "./StructureTable";
+import { downloadWorkbook } from "./ImportPanel";
 
 export default function StructurePage({
   data,
@@ -34,6 +35,8 @@ export default function StructurePage({
   const [promote, setPromote] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [assigning, setAssigning] = useState("");
   const [personQuery, setPersonQuery] = useState("");
   const byId = new Map(data.units.map((u) => [u.OrgUnitID, u]));
@@ -232,6 +235,15 @@ export default function StructurePage({
         structure. Reporting lines are separate; department codes stay attached
         to their units.
       </p>
+      {session.canViewCompensation && <div className="organizer-export">
+        <button className="secondary" disabled={exporting} onClick={async () => {
+          setExportError(""); setExporting(true);
+          try { await downloadWorkbook("organizer"); } catch (e) { setExportError((e as Error).message); }
+          finally { setExporting(false); }
+        }}><Download size={14}/>{exporting ? "Preparing Excel…" : "Export organizer Excel"}</button>
+        <small>Both entities · saved data · original layout + Power BI tables · no compensation or performance data</small>
+        {exportError && <p role="alert">{exportError}</p>}
+      </div>}
       <div className="structure-toolbar">
         <div className="view-tabs" aria-label="Structure format">
           <button aria-pressed={format === "viewer"} onClick={() => setFormat("viewer")}>Viewer</button>

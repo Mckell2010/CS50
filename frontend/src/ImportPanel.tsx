@@ -24,7 +24,7 @@ export async function downloadWorkbook(kind: string) {
   const blob = await r.blob();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `divergent-${kind}.xlsx`;
+  a.download = kind === "organizer" ? "Org-Chart-Organizer.xlsx" : `divergent-${kind}.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

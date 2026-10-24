@@ -86,3 +86,19 @@ The optional `Position Control` sheet matches **existing** people by unique `Uni
 Use **Entity → Both / Divergent / Czinger Vehicles** to filter people and payroll by employing company. It does not split or duplicate the Corporate hierarchy. Units default to Both; set a dedicated unit's Entity in its editor or table. Structural ancestors remain visible. Budget envelopes and calculated manager team allocations retain their full scope and are labeled accordingly. Filtered financial aggregates remain restricted for scoped owners to prevent disclosure by comparison.
 
 In **Org structure**, switch between **Viewer** and **Table**. Edit and save a table row to change the title, parent, owner, purpose, tier or entity. The chart, structure tree and planning pages reload from the same saved records. IDs remain stable; move a unit by changing its parent. The table hides previous assignments by default; enable **Include previous assignments awaiting new department IDs** to review them. Edit a person in Model settings or use Assign people in the structure viewer to finish mapping the roster. Updates use version checks, so a stale edit cannot overwrite a newer save.
+
+### Export the organizer for Excel or Power BI
+
+Administrators and Finance can select **Org structure → Export organizer Excel**. The download uses the original **Org Structure** (header row 4) and **Position Control** (header row 3) columns, populated from saved app data. It includes both entities regardless of the current view filter. Current names, titles, reporting managers, department assignments, purposes, owners and tiers replace uniquely matched source values. Source recruiting and approval fields are retained; a vacancy does not imply an approved requisition. Missing values stay blank and appear in **Export Notes**.
+
+To retain the original Position Control fields, import the organizer with this version of the app once. Original source values are saved atomically with the import and survive subsequent viewer/table edits. Earlier installations that have not reimported can still export current app data, with a note about unavailable source fields. Only the original organizer columns are retained; nonstandard columns, compensation and performance records are excluded from this export. The existing full workbook export remains separate.
+
+The download also contains named Excel tables for Power BI:
+
+- **Org Units / `tblOrgUnits`** and **People / `tblPeople`**: the current app snapshot. Join `People.OrgUnitID` to `OrgUnits.OrgUnitID`; use `ManagerID → EmployeeID` separately for reporting lines. IDs are text, preserving leading zeros.
+- **Position Links / `tblPositionLinks`**: identifies matched, source-only and app-only rows, with original and exported Excel row numbers. Source-only rows are preserved without guessing a person match. Review these before using the Position Control sheet as a staffing total; do not union it with People as another roster.
+- **Org Structure / `tblOrgStructure`**, **Position Control / `tblPositionControl`**, and **Export Notes / `tblExportNotes`** retain the organizer layout and provide review details.
+
+In Power BI Desktop, choose **Get data → Excel workbook**, select the exported file and load the named tables. Save subsequent exports over the same file to refresh that connection. Formatting is recreated for the export; workbook formulas, macros and Excel-specific validation extensions are not carried over. Formula-like text is written as literal text.
+
+The `Tier` column in Position Control is preserved as a source field (including values such as “Dependent”); it is separate from the numeric organizational depth in Org Structure and Org Units.

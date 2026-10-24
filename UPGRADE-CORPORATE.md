@@ -11,3 +11,7 @@ This source download contains the app, not your private roster or database.
 Saved table and viewer edits update the same records. The import preserves app-owned edits, existing compensation, budgets and objectives. Exact existing person IDs with new Department IDs are mapped; unmatched assignments stay under **Assignments to review**. This import updates the structure and matching assignments; it does not replace the full position roster or refresh hiring statuses.
 
 If you have no existing database, choose the organizer workbook when the launcher asks. It initializes the structure, with owner names from the workbook, but does not create the position roster. Use your previous organization-chart workbook first if you need to initialize the people data, then import the organizer through the app.
+
+## Export the completed organizer
+
+After updating, import your original organizer workbook once so its recruiting/approval fields can be retained alongside your saved app edits. In **Org structure**, choose **Export organizer Excel**. The file includes the original two layouts plus stable-ID Power BI tables and review notes for unknown or unmatched data. Export is available to Administrator and Finance roles and includes both entities; it excludes compensation and performance records. In Power BI, use **Get data → Excel workbook**, then select `tblOrgUnits` and `tblPeople` for the current app snapshot.

@@ -152,6 +152,9 @@ def prepare(workbook, database, use_discovery=False):
     model["executiveLeader"] = executive_leader
     db.set_setting("model", model)
     db.set_setting("demoNotes", warnings)
+    if "Org Structure" in headers:
+        from backend.organizer_export import organizer_source
+        db.set_setting("organizerSource", dict(organizer_source(Path(workbook).read_bytes()), filename=Path(workbook).name, importVersion=1))
     db.engine.dispose()
     return {
         "database": str(destination),

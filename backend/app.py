@@ -25,6 +25,7 @@ from backend.importer import parse_workbook, MAX_UPLOAD
 from backend.sample import sample_state, workbook_bytes
 from backend.organizer import organizer_import
 from backend.entity_view import entity_view, entity_units
+from backend.organizer_export import organizer_source, organizer_workbook
 
 DB = Database()
 
@@ -339,6 +340,18 @@ def compensation(ident: str, p: Principal = Depends(principal)):
 
 @app.get("/api/workbooks/{kind}")
 def download(kind: str, p: Principal = Depends(principal)):
+    if kind == "organizer":
+        if not p.finance:
+            raise HTTPException(403, "Organizer export requires administrator or finance access")
+        state, version = DB.read()
+        source = DB.get_setting("organizerSource")
+        if source and source.get("importVersion", 0) > version:
+            raise StaleWrite("Data changed during export; retry")
+        return Response(
+            organizer_workbook(state, source, version, DB.get_setting("synthetic", False)),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="Org-Chart-Organizer.xlsx"'},
+        )
     if kind not in {"template", "sample", "export"}:
         raise HTTPException(404, "Workbook not found")
     if kind == "export":
@@ -420,6 +433,8 @@ def create_preview(content, filename, mapping, mode, p, synthetic=False, restore
         "synthetic": synthetic or DB.get_setting("synthetic", False),
         "restore": restore,
     }
+    if "Org Structure" in headers:
+        data["organizerSource"] = dict(organizer_source(content), filename=filename, importVersion=v + 1)
     with DB.engine.begin() as c:
         c.execute(
             delete(previews).where(
@@ -428,7 +443,7 @@ def create_preview(content, filename, mapping, mode, p, synthetic=False, restore
             )
         )
         c.execute(insert(previews).values(id=token, actor=p.id, created=now, data=data))
-    return {k: value for k, value in data.items() if k != "state"}
+    return {k: value for k, value in data.items() if k not in {"state", "organizerSource"}}
 
 
 @app.post("/api/imports/preview")
@@ -521,6 +536,7 @@ def commit(ident: str, body: Commit, p: Principal = Depends(principal)):
             },
         },
         setting=("synthetic", data["synthetic"]),
+        settings_updates={"organizerSource": data["organizerSource"]} if "organizerSource" in data else None,
     )
     graph_status = DB.get_setting("graphStatus", {})
     if graph_status.get("previewId") == ident:

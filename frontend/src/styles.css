@@ -3267,3 +3267,5 @@ dt {
 .structure-table th:nth-child(8) { width: 15%; }
 .structure-table .inline-actions { flex-wrap: wrap; }
 .review-toggle { display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 12px; }
+.organizer-export { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+.organizer-export small { color: #646464; }

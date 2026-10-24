@@ -162,6 +162,7 @@ class Database:
         details=None,
         import_info=None,
         setting=None,
+        settings_updates=None,
     ):
         with self.engine.begin() as c:
             if (
@@ -197,9 +198,12 @@ class Database:
             )
             if import_info:
                 c.execute(insert(imports).values(**import_info, state=state))
+            updates = dict(settings_updates or {})
             if setting:
-                c.execute(delete(settings).where(settings.c.key == setting[0]))
-                c.execute(insert(settings).values(key=setting[0], value=setting[1]))
+                updates[setting[0]] = setting[1]
+            for key, value in updates.items():
+                c.execute(delete(settings).where(settings.c.key == key))
+                c.execute(insert(settings).values(key=key, value=value))
         return expected + 1
 
     def get_setting(self, key, default=None):
