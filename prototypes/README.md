@@ -24,6 +24,8 @@ If multiple units share a Department ID, the viewer keeps them separate and disp
 
 ## People and headcount
 
+Each card shows **Total headcount = Active + Filled + Approved**, with **Active** on the left and **Inactive** on the right underneath. Here, Inactive means roles that are not yet active (Filled + Approved); it does not include historical records whose Excel status is Inactive. Approved is the same approved/unfilled bucket previously labeled Sourcing. Each column shows Divergent/Czinger totals when both companies are selected; hover over Inactive for company counts by recruiting status or click to review the roles. The total and both columns use the same direct/subtree scope and company filters. Estimated assignments are summarized once beneath the columns.
+
 - The person icon at the bottom of each card opens its people list. A **collapsed** parent shows direct people plus everyone below it. An **expanded** parent shows only directly assigned people; its children show their own breakdowns. The secondary text always identifies direct, below, and total counts.
 - Counts use the full organizational hierarchy even when search or focus hides branches. These are people counts, not FTE-weighted totals. Department owners are not added automatically; their person records count only in their assigned unit.
 - Current people are named **Active** records in Position Control, including contractors. Approved, Filled, inactive, and unnamed open positions are excluded from active-people counts. Open roles are counted separately as described below. Repeated matching person identifiers and names are consolidated; company-only placeholder IDs do not combine different people. Conflicting assignments or ambiguous source department codes remain unassigned and appear in review.
@@ -40,13 +42,13 @@ Select **Divergent**, **Czinger**, or both. DTI and DII map to Divergent; CZV ma
 
 With both selected, cards show the company breakdown for the count currently displayed: direct assignments when expanded, or the full subtree when collapsed. Active and open counts both follow this rule. With one company selected, the chart, sidebar, table, counts, and review lists are scoped to that company. Ancestors needed to preserve the hierarchy remain visible. Units without staffing data remain visible when their company scope is shared or matches the selection.
 
-## Open roles: filled and sourcing
+## Open roles: filled and approved
 
 - **Filled:** Position ID Status is Filled, or an approved position has a recognized accepted-offer/filled stage. These positions remain separate from Active people; hire dates do not automatically promote them to Active.
-- **Sourcing:** approved but unfilled positions. This includes Approved - Hide and approved intern-conversion variants. When Stage is blank, this is an approved/unfilled planning bucket, not a claim that a recruiter is actively sourcing every role.
+- **Approved:** approved but unfilled positions. This includes Approved - Hide and approved intern-conversion variants. When Stage is blank, this is an approved/unfilled planning bucket, not a claim that a recruiter is actively sourcing every role.
 - **Held / gated / pending:** excluded from open-role counts and shown separately in the summary. Inactive positions are excluded.
 - Open roles count unique Position IDs, not candidate names. Repeated records are deduplicated. A Position ID already present as Active is excluded from open counts. Conflicting filled/sourcing statuses or employing companies for the same Position ID must be corrected before importing.
-- Click a card’s open-role count or **Review open roles** to inspect direct/below/all roles and the Filled/Sourcing tabs. Missing or legacy department codes can receive labeled title-based suggestions. Assignments can be reviewed and exported like active-person assignments.
+- Click a card’s open-role count or **Review open roles** to inspect direct/below/all roles and the Filled/Approved tabs. Missing or legacy department codes can receive labeled title-based suggestions. Assignments can be reviewed and exported like active-person assignments.
 - Card counts include assigned records only; the top summary also identifies unassigned people and roles, which are not silently allocated to a department.
 
 ## Owner portraits
