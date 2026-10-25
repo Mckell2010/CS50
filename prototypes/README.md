@@ -142,3 +142,10 @@ Use **Delete role** on a person/open-role card in Reporting Structure or in **Pe
 Use **Delete department** on an organizational card, or select a unit and use **Delete selected department** in the toolbar. The Corporation root cannot be deleted. Choose a remaining department or explicitly choose **Unassigned** for affected positions, including historical records. An explicit Unassigned choice will not be overwritten by title-based estimates, including after export/reimport.
 
 Children move up to the deleted department’s parent, and descendant tiers are recalculated. People’s reporting lines stay unchanged. Child budget percentages are recalculated to preserve their dollar envelopes; the removed department’s remaining allocation returns to the parent reserve. The confirmation shows the impact before applying. **Undo last workbook edit** restores the deleted records and structure during the current session. Download updated Excel to save the result.
+
+
+### Search department selectors
+
+Department selectors in role creation, person assignment, parent selection, and department deletion accept typed names or codes. Choices follow the organizational tree, with children indented beneath their parents even when workbook rows are out of order. Search retains ancestor rows for context; searching a parent name also finds its descendants. Shared/ambiguous codes remain unavailable.
+
+Click a result, or use the arrow keys and Enter to select it. Escape closes the menu; leaving a search without choosing a result retains the previous selection. Parent selections continue to update the new department’s tier. Unassigned remains available where supported.
