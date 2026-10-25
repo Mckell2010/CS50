@@ -112,7 +112,7 @@ A uniquely named active manager is saved by name. Open-role managers or duplicat
 
 ### Add a role
 
-Use **＋ Role** in the reporting toolbar or on a manager’s card. Enter a unique Position ID, title, Active/Filled/Approved status, person name when Active or Filled, direct manager (or explicit top-level choice), department, job level, employing company, location, and employment type. FTEs require Exempt/Non-exempt classification. Role type is optional. Department and job level are separate from reporting hierarchy and organizational tier.
+Use **＋ Role** in the reporting toolbar or on a manager’s card. Enter a unique Position ID, title, Active/Filled/Approved status, person name when Active (optional for Filled/Approved), direct manager (or explicit top-level choice), department, job level, employing company, location, and employment type. FTEs require Exempt/Non-exempt classification. Role type is optional. Department and job level are separate from reporting hierarchy and organizational tier.
 
 The role is appended to Position Control and appears in reporting/headcount/payroll views immediately. Existing rows—including held and inactive positions—are preserved. IDs must be unique across the whole source sheet. Demo compensation is initialized using the selected pay classification; existing budgets remain fixed. A company filter is expanded when necessary to show the newly created role. **People table** displays current Position Control fields, including manager, department and level, and updates after edits.
 
@@ -149,3 +149,26 @@ Children move up to the deleted department’s parent, and descendant tiers are 
 Department selectors in role creation, person assignment, parent selection, and department deletion accept typed names or codes. Choices follow the organizational tree, with children indented beneath their parents even when workbook rows are out of order. Search retains ancestor rows for context; searching a parent name also finds its descendants. Shared/ambiguous codes remain unavailable.
 
 Click a result, or use the arrow keys and Enter to select it. Escape closes the menu; leaving a search without choosing a result retains the previous selection. Parent selections continue to update the new department’s tier. Unassigned remains available where supported.
+
+
+## Person photos and editable details
+
+In **Reporting Structure**, click a person’s circular initials/photo to upload or replace a portrait. PNG, JPEG and WebP files up to 5 MB are accepted and cropped to a small square thumbnail. **People table → Photo** provides the same action. Photos remain local. **Save reporting settings** includes person photos, manager overrides, the column layout and brand images; **Load settings** restores them for the same workbook. Person photos use position identifiers (or source rows when identifiers are missing/ambiguous), so changing a name or title does not lose the portrait. Photos are separate from the Excel workbook and are never bundled in the public viewer ZIP.
+
+**Edit details** on a reporting card or in People table edits name, position title, level, status, employing company, location, employment type/classification, role type, department and direct manager. Only changed fields are applied to that person’s source rows. Existing nonstandard values and unresolved manager labels remain unchanged unless explicitly edited. Position IDs stay fixed. Multi-position people can edit shared details here; their position statuses must be changed individually in Excel to avoid inadvertently changing several roles at once.
+
+Renaming a uniquely identified manager updates resolved references, including historical rows, and matching department-owner labels. Duplicate names use explicit position references when needed. Unconfirmed nickname guesses remain unconfirmed. Reporting loops and edits that would merge/split person identities are rejected. Name, company and status changes preserve the record’s existing illustrative compensation and budgets; compensation assumptions are edited separately in **People & demo pay**. **Undo last workbook edit** restores details. **Download updated Excel** saves names, titles and other workbook fields.
+
+**OPEN ROLE** appears as an amber flag on the right of unfilled open-position cards. **FILLED** appears as a green flag for filled positions awaiting start, including those whose person name is not yet entered. Flags remain visible on compact cards. Active people still require names; Filled and Approved positions can be unnamed.
+
+## Budgets tab
+
+**Budgets** provides dedicated **Tree** and **Table** editors for the same planning budgets used by Payroll. At Corporation, set annual dollar envelopes for each company. At every lower tier, edit a percentage of that company’s parent budget. Tree cards show the resulting amounts and open the budget editor. Table rows provide editable dollar/percentage fields, immediate dollar previews and an **Apply** button. Invalid values and sibling allocations above 100% are rejected without applying changes.
+
+Both views show fully staffed illustrative payroll, budget used and reserve available for direct staff or unallocated funds. Parent and child totals overlap and should not be summed. Company filters apply to the displayed scope. **Save scenario** preserves budgets and fictional pay; **Load scenario** restores them for the matching workbook. Budget edits are planning data and are separate from the original-format Excel export.
+
+## Reporting columns by job level
+
+The reporting viewer defaults to **X → M/E/S → T** columns. Executive X codes come first, descending numerically. M, E and S share each numeric grade (for example M06, E06 and S06 occupy one Level 6 column), highest grade first. T codes follow all M/E/S grades, highest T number first. Legacy numeric-only levels join the matching M/E/S grade. Blank, ranged, unrecognized and conflicting levels remain visible in clearly labeled review columns; the viewer does not invent a grade.
+
+Column headings show the grouping above the cards. **Columns → Exact level codes** separates codes, retaining X-first and T-last ordering for recognized codes. **Reporting depth** restores the previous layout. The reporting sidebar and connecting arrows always use Direct Manager. Same-level managers/reports and reverse-level relationships remain connected and are placed without overlapping cards. Level alignment changes presentation only; it does not change reporting lines or department membership. Change a person’s Level through **Edit details** to move their card to the corresponding column.
