@@ -102,7 +102,7 @@ The final **Reporting Structure** tab uses **Direct Manager** from Position Cont
 
 ## Edit the trees and save back to Excel
 
-All three editing flows operate locally and validate before committing. **Download updated Excel** saves an `.xlsx` copy in the original workbook format. Browser upload access does not permit silent overwriting of the source file. Replace your original file with the exported copy if desired, or retain both versions. Reopen the exported workbook to continue from the saved state. **Undo last workbook edit** supports the last 30 edits in the current session; unrelated demo-pay and budget edits remain intact.
+All editing flows operate locally and validate before committing. **Download updated Excel** saves an `.xlsx` copy in the original workbook format. Browser upload access does not permit silent overwriting of the source file. Replace your original file with the exported copy if desired, or retain both versions. Reopen the exported workbook to continue from the saved state. **Undo last workbook edit** supports the last 30 edits in the current session; unrelated demo-pay and budget edits remain intact.
 
 ### Reconnect a reporting line
 
@@ -124,6 +124,21 @@ The new unit appears in the tree and structure table, and selected records recei
 
 ### What the Excel export preserves
 
-The exporter retains the original XLSX archive and replaces only edited worksheet cells, applicable table ranges, and workbook recalculation settings. Original sheet names, header rows, other worksheets, unrelated fields, formulas, cell styles, existing validation definitions and other ZIP contents are preserved. New records are appended after existing worksheet rows, including any formatted trailing rows. Known fields use existing columns; nonempty new fields such as FLSA Classification are added only if needed. Department codes are written as text, preserving leading zeros. Formula-like text is stored as literal text, not executed.
+The loaded workbook is the export template. With **Keep original column layout** enabled (the default), the latest Organizer layout stays intact: **Org Structure** headers on row 4 and **Position Control** headers on row 3, with their original column names and order. Load your latest workbook before editing to use its formatting. Sheet names, frozen panes, original cell styles, unrelated worksheets/fields, and validation definitions are retained. New rows inherit the last data row’s formatting and formulas, with relative references translated; filters and validation ranges extend for appended rows. Excel recalculates formulas when opened.
+
+Extra viewer fields absent from the original columns, such as FLSA Classification, are saved in a custom workbook property and restored when reopened in this viewer. They do not add columns or worksheets in the default mode. Uncheck **Keep original column layout** if you want those extra fields exported as ordinary columns for tools such as Power BI. Department codes remain text, preserving leading zeros; formula-like user input remains literal text.
+
+Deleted records are cleared in their original Excel rows, leaving blank formatted rows rather than shifting other rows and breaking their formula references. Cleared records are excluded on reimport. Appended records use new row numbers, so adding after a deletion cannot overwrite an earlier record.
 
 Only explicit changes and reviewed assignments are saved. Unconfirmed title-based department guesses and nickname-based manager suggestions are not silently written into the source file. Fictional payroll and budgets remain separate scenario data and are not substituted for original compensation. Updated workbooks and locally edited roster data are never included in the public viewer package or uploaded anywhere.
+
+
+### Delete a role
+
+Use **Delete role** on a person/open-role card in Reporting Structure or in **People table**. If a person has several positions, select the Position ID to remove. Other positions remain. Before deleting a manager position, choose a replacement manager or explicitly choose **No manager / top level** for affected direct reports. Held/inactive source rows that reference the manager are included in reassignment. Self-reporting and new cycles are rejected. Direct reports are retained, and headcounts and demo payroll update immediately; budgets stay fixed.
+
+### Delete a department
+
+Use **Delete department** on an organizational card, or select a unit and use **Delete selected department** in the toolbar. The Corporation root cannot be deleted. Choose a remaining department or explicitly choose **Unassigned** for affected positions, including historical records. An explicit Unassigned choice will not be overwritten by title-based estimates, including after export/reimport.
+
+Children move up to the deleted department’s parent, and descendant tiers are recalculated. People’s reporting lines stay unchanged. Child budget percentages are recalculated to preserve their dollar envelopes; the removed department’s remaining allocation returns to the parent reserve. The confirmation shows the impact before applying. **Undo last workbook edit** restores the deleted records and structure during the current session. Download updated Excel to save the result.
