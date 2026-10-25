@@ -170,3 +170,12 @@ Both views show fully staffed illustrative payroll, budget used and reserve avai
 ## Reporting layout
 
 The reporting tree follows **Direct Manager**, with each successive reporting layer one column to the right. Job Level remains visible on person cards and editable through **Edit details**, but does not determine card placement. Existing reporting settings files still load their photos, manager overrides and brand images; their former level-layout setting is ignored.
+
+
+## Associate a LinkedIn profile with a person
+
+Use **Reporting Structure → Edit details → LinkedIn profile URL** to associate the verified person profile. **Open profile** previews the link in a separate tab before saving. Saved links are also available on the reporting card, in People table, and beside the photo uploader. The photo dialog’s **Add/Edit LinkedIn profile** button opens the same details editor.
+
+Paste an HTTPS LinkedIn person-profile link (`https://www.linkedin.com/in/name/`). The viewer accepts regional LinkedIn profile links, normalizes them to the public profile URL, and removes tracking parameters. Invalid URLs and company/search pages cannot be saved as person profiles. Conflicting or invalid imported links remain unavailable until reviewed. Opening a profile is an explicit action; the viewer does not fetch LinkedIn photos automatically.
+
+After verifying the profile, use **Upload photo** to attach a PNG/JPEG/WebP portrait. Keep profile links with **Download updated Excel** and portraits with **Save reporting settings**. The standard optional Position Control column is **LinkedIn Profile URL**. With **Keep original column layout** enabled, a link is saved in workbook metadata if that column is absent and restored on reimport. Turn that option off to export the link as a regular column. Clearing the profile field removes the association; Undo restores the previous value.
