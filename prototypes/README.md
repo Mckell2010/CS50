@@ -180,3 +180,14 @@ Use **Reporting Structure → Edit details → LinkedIn profile URL** to associa
 Paste an HTTPS LinkedIn person-profile link (`https://www.linkedin.com/in/name/`). The viewer accepts regional LinkedIn profile links, normalizes them to the public profile URL, and removes tracking parameters. Invalid URLs and company/search pages cannot be saved as person profiles. Conflicting or invalid imported links remain unavailable until reviewed. Opening a profile is an explicit action; the viewer does not fetch LinkedIn photos automatically.
 
 After verifying the profile, use **Upload photo** to attach a PNG/JPEG/WebP portrait. Keep profile links with **Download updated Excel** and portraits with **Save reporting settings**. The standard optional Position Control column is **LinkedIn Profile URL**. With **Keep original column layout** enabled, a link is saved in workbook metadata if that column is absent and restored on reimport. Turn that option off to export the link as a regular column. Clearing the profile field removes the association; Undo restores the previous value.
+
+
+## Department companies and cross-company support
+
+Every department belongs to exactly **Divergent** or **Czinger**. Corporation remains the shared root. A gray/blue company badge appears on department cards and in Organization, Payroll, and Budgets tables. Click it to assign or confirm the company; new departments also have a company selector. The choice applies only to that department, preserving child assignments, employee employing companies, reporting lines, and payroll.
+
+A **⚑ Supports Czinger** flag marks a Divergent department with any Czinger descendant departments. **⚑ Supports Divergent** marks the reverse. These flags use the entire department hierarchy, including collapsed branches and departments hidden by company filters. Hover over a flag for the descendant count. An employee from the other company alone does not trigger a flag. Corporation is a shared container and does not receive a support flag.
+
+Imports read **Department Company** and optional **Department Company Basis** from Org Structure. Older workbooks receive suggested assignments from explicit company names, then their parent branch, defaulting to Divergent. Badges marked **review** identify these suggestions; they are not verified ownership. Changing a parent does not silently reassign children. Employee company filters continue to filter headcounts by employing company and retain relevant department ancestors.
+
+**Download updated Excel** saves department assignments and their suggested/selected basis. With **Keep original column layout** enabled, missing fields are retained in workbook metadata and restored on reimport, including structure-only workbooks. Uncheck it to add ordinary **Department Company** and **Department Company Basis** columns to Org Structure for Excel or Power BI. **Undo last workbook edit** reverses company edits.
